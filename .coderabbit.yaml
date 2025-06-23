@@ -1,0 +1,22 @@
+# CodeRabbit configuration file
+# See https://docs.coderabbit.ai/reference/config/
+
+# Basic configuration
+reviews:
+  enabled: true
+  auto_approve_trigger: 'LGTM'  # Optional: Allow auto-approve with LGTM comment
+  
+# Customize review behavior
+review:
+  # Enable/disable specific checks
+  check_for_issues: true
+  check_for_security_issues: true
+  check_for_performance_issues: true
+  check_for_best_practices: true
+  
+# Ignore specific files or directories
+ignore:
+  - '**/node_modules/**'
+  - '**/*.md'
+  - '**/*.json'
+  - '**/*.lock'

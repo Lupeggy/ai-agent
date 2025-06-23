@@ -1,0 +1,24 @@
+name: CodeRabbit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+jobs:
+  coderabbit:
+    if: github.actor != 'dependabot[bot]' && github.actor != 'dependabot-preview[bot]'
+    name: CodeRabbit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: CodeRabbit Review
+        uses: coderabbitai/coderabbit-action@main
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
