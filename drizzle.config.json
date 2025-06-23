@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/drizzle-kit/schema.json",
+  "out": "./drizzle",
+  "schema": "./src/db/schemas.ts",
+  "breakpoints": true,
+  "driver": "pg",
+  "dbCredentials": {
+    "connectionString": "${process.env.DATABASE_URL}"
+  }
+}
