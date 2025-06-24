@@ -28,6 +28,13 @@ export default function Home() {
     checkSession()
   }, [])
 
+  useEffect(() => {
+    // Redirect to sign-in if not authenticated and not loading
+    if (!loading && !user) {
+      router.push("/sign-in")
+    }
+  }, [loading, user, router])
+
   const handleSignOut = async () => {
     try {
       await authClient.signOut()
@@ -78,7 +85,5 @@ export default function Home() {
     )
   }
 
-  // If not logged in, redirect to sign-in page
-  router.push("/sign-in")
   return null
 }

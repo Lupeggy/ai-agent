@@ -97,22 +97,6 @@ export const SignUpView = () => {
     }))
   }
 
-  const handleSocial = async (provider: "google" | "github") => {
-    setIsLoading(true)
-    setError("")
-    try {
-      await authClient.signIn.social({
-        provider,
-        callbackURL: "/"
-      })
-    } catch (error) {
-      console.error("Social sign up failed:", error)
-      setError("Failed to sign up with " + provider)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -181,7 +165,11 @@ export const SignUpView = () => {
           variant="outline"
           className="w-full flex items-center gap-2 justify-center font-semibold"
           type="button"
-          onClick={() => handleSocial("google")}
+          onClick={() => {
+            authClient.signIn.social({
+                provider: "google",
+            })
+          }}
           disabled={isLoading}
         >
           <FcGoogle size={22} /> Continue with Google
@@ -190,7 +178,11 @@ export const SignUpView = () => {
           variant="outline"
           className="w-full flex items-center gap-2 justify-center font-semibold"
           type="button"
-          onClick={() => handleSocial("github")}
+          onClick={() => {
+            authClient.signIn.social({
+                provider: "github",
+            })
+          }}
           disabled={isLoading}
         >
           <FaGithub size={20} /> Continue with GitHub
