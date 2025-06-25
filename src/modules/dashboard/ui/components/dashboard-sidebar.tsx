@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BotIcon, Video, ArrowUpCircle } from "lucide-react"
+import { DashboardUserButton } from "./dashboard-user-button"
 
 const mainNav = [
   { label: "Meetings", href: "/dashboard/meetings", icon: <Video size={20} /> },
@@ -48,7 +49,7 @@ export default function DashboardSidebar() {
       <div className="border-t my-4" />
 
       {/* Secondary Navigation */}
-      <nav className="flex flex-col gap-1">
+      <nav className="flex flex-col gap-1 mb-auto">
         {secondaryNav.map((item) => (
           <Link
             key={item.href}
@@ -63,6 +64,14 @@ export default function DashboardSidebar() {
           </Link>
         ))}
       </nav>
+      
+      {/* Divider before user button */}
+      <div className="border-t my-4" />
+      
+      {/* User Button */}
+      <div className="mt-auto">
+        <DashboardUserButton />
+      </div>
     </aside>
   )
 }
