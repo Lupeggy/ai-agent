@@ -1,10 +1,12 @@
 "use client"
 
+import React, { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { BotIcon, Video, ArrowUpCircle } from "lucide-react"
 import { DashboardUserButton } from "./dashboard-user-button"
+import { useSidebar } from "@/components/ui/sidebar"
 
 const mainNav = [
   { label: "Meetings", href: "/dashboard/meetings", icon: <Video size={20} /> },
@@ -15,11 +17,30 @@ const secondaryNav = [
   { label: "Upgrades", href: "/dashboard/upgrades", icon: <ArrowUpCircle size={20} /> },
 ]
 
-export default function DashboardSidebar() {
+export function DashboardSidebar() {
   const pathname = usePathname()
+  const { isOpen } = useSidebar()
+  
+  // Update backdrop visibility when sidebar state changes
+  useEffect(() => {
+    const backdrop = document.getElementById('sidebar-backdrop')
+    if (backdrop) {
+      if (isOpen) {
+        backdrop.classList.remove('hidden')
+      } else {
+        backdrop.classList.add('hidden')
+      }
+    }
+  }, [isOpen])
 
   return (
-    <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white border-r min-h-screen py-8 px-4 shadow-sm">
+    <aside className={cn(
+      "fixed top-0 left-0 z-40 h-screen flex-col bg-white border-r py-8 px-4 shadow-sm transition-all duration-300 ease-in-out",
+      // All screen sizes - controlled by isOpen state
+      isOpen ? "flex w-64" : "hidden w-0",
+      // Semi-transparent overlay when sidebar is open
+      isOpen ? "shadow-xl" : ""
+    )}>
       {/* Logo Section */}
       <div className="mb-10 flex items-center gap-2 px-2">
         <div className="rounded-full bg-blue-600 text-white w-9 h-9 flex items-center justify-center font-bold text-xl">

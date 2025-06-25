@@ -13,14 +13,43 @@ import { Menu } from "lucide-react"
 type SidebarContextType = {
   isOpen: boolean
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>
+  toggleSidebar: () => void
+  closeSidebar: () => void
 }
 
 const SidebarContext = React.createContext<SidebarContextType | undefined>(undefined)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = React.useState(false)
+  
+  // Toggle sidebar open/close
+  const toggleSidebar = React.useCallback(() => {
+    setIsOpen(prev => !prev)
+    
+    // Toggle backdrop visibility
+    const backdrop = document.getElementById('sidebar-backdrop')
+    if (backdrop) {
+      if (!isOpen) {
+        backdrop.classList.remove('hidden')
+      } else {
+        backdrop.classList.add('hidden')
+      }
+    }
+  }, [isOpen])
+  
+  // Close sidebar only
+  const closeSidebar = React.useCallback(() => {
+    setIsOpen(false)
+    
+    // Hide backdrop
+    const backdrop = document.getElementById('sidebar-backdrop')
+    if (backdrop) {
+      backdrop.classList.add('hidden')
+    }
+  }, [])
+  
   return (
-    <SidebarContext.Provider value={{ isOpen, setIsOpen }}>
+    <SidebarContext.Provider value={{ isOpen, setIsOpen, toggleSidebar, closeSidebar }}>
       {children}
     </SidebarContext.Provider>
   )
