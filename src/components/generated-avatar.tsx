@@ -10,29 +10,37 @@ interface GeneratedAvatarProps {
     className?: string;
     variant?: "botttsNeutral" | "initials";
 }
-    export const GeneratedAvatar = ({
+
+export const GeneratedAvatar = ({
         seed, 
         className, 
         variant = "botttsNeutral"
     }: GeneratedAvatarProps) => {
-        let avatar;
+    // Create avatar using the requested style (only 'seed' is a guaranteed option across styles)
+    const avatar = createAvatar(
+        variant === "initials" ? initialStyle : botttsNeutral,
+        { seed }
+    );
 
-        if (variant === "botttsNeutral") {
-            avatar = createAvatar(botttsNeutral, {
-                seed,
-            });
-        } else if (variant === "initials") {
-            avatar = createAvatar(initialStyle, {
-                seed,
-                fontWeight: 500,
-                fontSize: 50,
-            });
-        }
+    // Generate avatar URI
+    const avatarUri = avatar.toDataUri();
+    const fallback = seed.charAt(0).toUpperCase();
+
         return (
             <Avatar className={cn("h-10 w-10", className)}>
-                <AvatarImage src={avatar.toDataUri()} alt="Avatar" />
-                <AvatarFallback>{seed.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarImage 
+                src={avatarUri} 
+                alt={`${fallback}'s avatar`} 
+                onError={(e) => {
+                    // Fallback to initials if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.classList.remove('hidden');
+                }} 
+            />
+            <AvatarFallback className="bg-muted">
+                {fallback}
+            </AvatarFallback>
             </Avatar>
-        )
+    );
     };
-

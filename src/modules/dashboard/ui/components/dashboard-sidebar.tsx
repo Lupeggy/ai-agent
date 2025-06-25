@@ -35,11 +35,8 @@ export function DashboardSidebar() {
 
   return (
     <aside className={cn(
-      "fixed top-0 left-0 z-40 h-screen flex-col bg-white border-r py-8 px-4 shadow-sm transition-all duration-300 ease-in-out",
-      // All screen sizes - controlled by isOpen state
-      isOpen ? "flex w-64" : "hidden w-0",
-      // Semi-transparent overlay when sidebar is open
-      isOpen ? "shadow-xl" : ""
+      "fixed top-0 left-0 z-40 h-screen w-64 flex flex-col bg-white border-r py-8 px-4 shadow-sm transition-transform duration-300 ease-in-out",
+      isOpen ? "translate-x-0" : "-translate-x-full"
     )}>
       {/* Logo Section */}
       <div className="mb-10 flex items-center gap-2 px-2">
