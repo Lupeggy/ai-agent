@@ -6,6 +6,8 @@ import { getQueryClient, trpc } from "@/trpc/server";
 
 import { ErrorBoundary } from "react-error-boundary";
 
+import { AgentListHeader } from "@/modules/agents/ui/components/agent-list-header";
+
 import { 
     AgentsView, 
     AgentViewLoading, 
@@ -22,6 +24,9 @@ const Page = async () => {
   void queryClient.prefetchQuery(trpc.agents.getMany.queryOptions());
 
   return (
+
+  <>
+    <AgentListHeader />
     <HydrationBoundary state={dehydrate(queryClient)}>
       <Suspense fallback={<AgentViewLoading />}>
         <ErrorBoundary fallback={<AgentsViewError />}>
@@ -29,6 +34,8 @@ const Page = async () => {
         </ErrorBoundary>
       </Suspense>
     </HydrationBoundary>
+  </>
+    
   );
 };
 
