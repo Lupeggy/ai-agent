@@ -2,7 +2,7 @@
 
 import { NewAgentButton } from "./new-agent-button";
 
-interface AgentListHeaderProps {
+export interface AgentListHeaderProps {
   meetingCount: number;
   onAddNewAgent: () => void;
 }

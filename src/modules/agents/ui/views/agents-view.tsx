@@ -32,6 +32,7 @@ export const AgentsViewError = () => {
     );
 };
 
+
 export const AgentsView = () => {
   const trpc = useTRPC();
   const { data } = useSuspenseQuery(trpc.agents.getMany.queryOptions());
@@ -51,45 +52,46 @@ export const AgentsView = () => {
   // The type for columns needs to be asserted to avoid TS errors with generics
   const agentColumns = columns as ColumnDef<Agent, unknown>[];
 
-  if (!agents.length) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-        <svg
-          className="w-16 h-16 mb-4 text-gray-300"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-6.13a4 4 0 11-8 0 4 4 0 018 0z"
-          />
-        </svg>
-        <span className="text-xl font-medium text-gray-700 mb-2">No agents found</span>
-        <span className="text-sm text-gray-500 mb-6">Create your first agent to get started!</span>
-        
-        <NewAgentButton onClick={handleAddNewAgent} />
-      </div>
-    );
-  }
-
   return (
     <>
       <NewAgentDialog
         open={isNewAgentDialogOpen}
         onOpenChange={setIsNewAgentDialogOpen}
       />
-      <div className="container mx-auto py-8">
-        <AgentListHeader
-          meetingCount={totalMeetings}
-          onAddNewAgent={handleAddNewAgent}
-        />
-        <div className="mt-6">
-          <DataTable data={agents} columns={agentColumns} />
+      {!agents.length ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/80 p-12 h-[450px]">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 mb-6">
+              <svg
+                className="w-10 h-10 text-slate-500"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-6.13a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold text-slate-800 mb-2">No Agents Found</h2>
+            <p className="text-base text-slate-600 mb-8 max-w-xs text-center">
+              Create your first agent to get started!
+            </p>
+            <NewAgentButton onClick={handleAddNewAgent} />
+          </div>
+      ) : (
+        <div className="container mx-auto py-8">
+          <AgentListHeader
+            meetingCount={totalMeetings}
+            onAddNewAgent={handleAddNewAgent}
+          />
+          <div className="mt-6">
+            <DataTable data={agents} columns={agentColumns} />
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 };
