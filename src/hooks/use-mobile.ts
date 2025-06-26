@@ -5,20 +5,28 @@ import { useEffect, useState } from "react";
  * Returns true if the device width is less than or equal to 768px.
  */
 export function useIsmobile() {
-  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Function to update the state based on window width
-    function handleResize() {
-      setIsMobile(window.innerWidth <= 768);
+    // A check to ensure window is defined, preventing SSR errors
+    if (typeof window === "undefined") {
+      return;
     }
 
-    // Initial check
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    // Set the initial state
     handleResize();
 
-    // Add event listener
+    // Add event listener for window resize
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+
+    // Cleanup function to remove the event listener
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
   return isMobile;

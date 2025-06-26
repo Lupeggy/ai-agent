@@ -1,26 +1,24 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { NewAgentDialog } from "./new-agent-dialog";
-import { useState } from "react";
+import { NewAgentButton } from "./new-agent-button";
 
-export const AgentListHeader = () => {
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+interface AgentListHeaderProps {
+  meetingCount: number;
+  onAddNewAgent: () => void;
+}
+
+export const AgentListHeader = ({
+  meetingCount,
+  onAddNewAgent,
+}: AgentListHeaderProps) => {
   return (
-
-    <> <NewAgentDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
-    
-        <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">My Agents</h2>
-        <Button
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium shadow"
-            onClick={() => setIsDialogOpen(true)}
-        >
-            <Plus className="w-4 h-4" />
-            Add New Agent
-        </Button>
+    <div className="flex items-center justify-end">
+      <div className="flex items-center gap-4">
+        <div className="text-sm text-muted-foreground">
+          {meetingCount} Meeting{meetingCount !== 1 ? 's' : ''} in total
         </div>
-        </>
+        <NewAgentButton onClick={onAddNewAgent} />
+      </div>
+    </div>
   );
 };

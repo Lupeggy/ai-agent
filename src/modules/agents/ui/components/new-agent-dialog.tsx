@@ -12,22 +12,6 @@ interface NewAgentDialogProps {
 }
 
 export const NewAgentDialog = ({ open, onOpenChange }: NewAgentDialogProps) => {
-  const [name, setName] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    // Here you would normally call your API/mutation
-    setTimeout(() => {
-      setLoading(false);
-      setName("");
-      setInstructions("");
-      onOpenChange(false);
-    }, 500); // Simulate network delay
-  };
-
   return (
     <ResponsiveDialog
       open={open}
