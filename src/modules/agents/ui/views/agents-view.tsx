@@ -6,6 +6,8 @@ import { useTRPC } from "@/trpc/client";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { LoadingState } from "@/components/loading-state";
 import { ErrorState } from "@/components/error-state";
+import { Button } from "@/components/ui/button";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 
 type Agent = {
   id: string;
@@ -40,11 +42,29 @@ export const AgentsView = () => {
 
   if (!agents.length) {
     return (
-      <div className="flex flex-col items-center justify-center h-40 text-gray-500">
-        <svg className="w-12 h-12 mb-2 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-6.13a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-        <span className="text-lg">No agents found.</span>
-        <span className="text-sm mt-1">Create your first agent to get started!</span>
-      </div>
+      <ResponsiveDialog
+        open
+        onOpenChange={() => {}}
+        title="No agents found"
+        description="Create your first agent to get started!"
+      >
+        <div className="flex items-center gap-2 mb-6">
+          <Link href="/dashboard" className="flex items-center text-blue-600 hover:underline">
+            <ArrowLeft size={16} className="mr-1" />
+            Back to Dashboard
+          </Link>
+        </div>
+        <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+          <svg className="w-12 h-12 mb-2 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-6.13a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+          <span className="text-lg">No agents found.</span>
+          <span className="text-sm mt-1">Create your first agent to get started!</span>
+        </div>
+        <div className="flex justify-center mt-6">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium">
+            Create my first agent
+          </Button>
+        </div>
+      </ResponsiveDialog>
     );
   }
 
@@ -77,9 +97,6 @@ export const AgentsView = () => {
   );
 };
 
-// If you want to use AgentsView inside AgentsPage, uncomment the line below
-// <AgentsView />
-
 export default function AgentsPage() {
   return (
     <div className="container mx-auto py-6">
@@ -90,13 +107,7 @@ export default function AgentsPage() {
         </Link>
       </div>
       <h1 className="text-3xl font-bold mb-6">My Agents</h1>
-      <div className="bg-white rounded-lg shadow p-8 text-center">
-        <p className="text-xl mb-4">This is the agents page</p>
-        <p className="text-gray-500">Your agents will appear here</p>
-      </div>
-      {/* Render your AgentsView here if you want */}
-      {/* <AgentsView /> */}
+      <AgentsView />
     </div>
   );
-
 }
