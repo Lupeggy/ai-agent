@@ -10,11 +10,11 @@ import { useSidebar } from "@/components/ui/sidebar"
 
 const mainNav = [
   { label: "Meetings", href: "/dashboard/meetings", icon: <Video size={20} /> },
-  { label: "Agents", href: "/dashboard/agents", icon: <BotIcon size={20} /> },
+  { label: "Agents", href: "/agents", icon: <BotIcon size={20} /> },
 ]
 
 const secondaryNav = [
-  { label: "Upgrades", href: "/dashboard/upgrades", icon: <ArrowUpCircle size={20} /> },
+  { label: "Upgrades", href: "/upgrades", icon: <ArrowUpCircle size={20} /> },
 ]
 
 export function DashboardSidebar() {
