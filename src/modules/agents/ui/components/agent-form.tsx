@@ -1,32 +1,20 @@
 "use client";
 
 import { AgentsGetOne } from "../../types";
-import { useTRPC } from "@/trpc/client";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useTRPC } from "@/trpc/client";
 import { toast } from "sonner";
-
-import { useForm } from "react-hook-form";
 import { z } from "zod";
-
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { agentInsertSchema } from "../../schemas";
-
-import { GeneratedAvatar } from "@/components/generated-avatar";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { agentInsertSchema } from "../../schemas";
+import { GeneratedAvatar } from "@/components/generated-avatar";
 
 interface AgentFormProps {
   onSuccess?: () => void;
@@ -34,62 +22,48 @@ interface AgentFormProps {
   initialValues?: AgentsGetOne;
 }
 
+// Form component for creating or updating an agent
 export const AgentForm = ({ onSuccess, onCancel, initialValues }: AgentFormProps) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const trpc = useTRPC();
-
-  const createAgent = useMutation(
-    trpc.agents.create.mutationOptions({
-      onSuccess: async() => {
-        await queryClient.invalidateQueries(
-          trpc.agents.getMany.queryOptions(),
-        );
-
-        if (initialValues?.id) {
-          await queryClient.invalidateQueries(
-            trpc.agents.getOne.queryOptions({ id: initialValues.id }),
-          )
-        }
-        toast.success(initialValues?.id ? "Agent updated successfully" : "Agent created successfully");
-        onSuccess?.();
-      },
-
-      onError: (error) => {
-        toast.error(initialValues?.id ? "Failed to update agent" : "Failed to create agent", {
-          description: error.message || "Please try again later"
-
-        //TODO: 
-        });
-      },
-    })
-  )
-
-  // We don't need the manual isSubmitting state anymore as we can use the mutation's isPending state
-
+  
+  // Create a form with validation
   const form = useForm<z.infer<typeof agentInsertSchema>>({
     resolver: zodResolver(agentInsertSchema),
     defaultValues: {
-      name: initialValues?.name ?? "",
-      instructions: initialValues?.instructions ?? ""
-    }
+      name: initialValues?.name || "",
+      instructions: initialValues?.instructions || "",
+    },
   });
 
-  const isEdit = !!initialValues?.id;
-  const isPending = createAgent.isPending;
-  
-  const onSubmit = (values: z.infer<typeof agentInsertSchema>) => {
-    if (isEdit) {
-      console.log("TODO: Update agent");
-      // Will implement update logic in the future
-    } else {
-      createAgent.mutate(values);
-    }
+  // Set up the mutation using the correct tRPC v11 pattern with TanStack Query
+  const createAgentMutation = useMutation({
+    // Get the base mutation options from the tRPC procedure
+    ...trpc.agents.create.mutationOptions(),
+    // Add our callbacks, letting TS infer the error type
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: trpc.agents.getMany.queryKey() });
+      toast.success("Agent created successfully!");
+      onSuccess?.();
+    },
+    onError: (error) => {
+      toast.error(`Failed to create agent: ${error.message}`);
+      console.error("Failed to create agent:", error);
+    },
+  });
+
+  // Handle the form submission
+  const handleCreateAgent = (data: z.infer<typeof agentInsertSchema>) => {
+    createAgentMutation.mutate(data);
   };
 
+  // Determine if we're editing an existing agent
+  const isEdit = !!initialValues?.id;
+  
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleCreateAgent)} className="space-y-6">
         <div className="flex items-center gap-4 mb-6">
           <GeneratedAvatar
             seed={form.watch("name")}
@@ -105,7 +79,7 @@ export const AgentForm = ({ onSuccess, onCancel, initialValues }: AgentFormProps
             </p>
           </div>
         </div>
-
+        
         <FormField
           control={form.control}
           name="name"
@@ -146,20 +120,24 @@ export const AgentForm = ({ onSuccess, onCancel, initialValues }: AgentFormProps
 
         <div className="flex justify-end gap-2 pt-4">
           {onCancel && (
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={onCancel}
-              disabled={isPending}
+              disabled={createAgentMutation.isPending}
             >
               Cancel
             </Button>
           )}
-          <Button 
-            type="submit" 
-            disabled={isPending || !form.formState.isDirty}
+          <Button
+            type="submit"
+            disabled={createAgentMutation.isPending || !form.formState.isDirty}
           >
-            {isPending ? "Saving..." : isEdit ? "Update Agent" : "Create Agent"}
+            {createAgentMutation.isPending
+              ? "Saving..."
+              : isEdit
+              ? "Update Agent"
+              : "Create Agent"}
           </Button>
         </div>
       </form>

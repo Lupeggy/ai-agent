@@ -47,7 +47,7 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp('updated_at').$defaultFn(() => /* @__PURE__ */ new Date())
         });
 
-export const agent = pgTable("agents", {
+export const agent = pgTable("agent", {
 	id: text('id').primaryKey().$defaultFn(()=> nanoid()),
 	name: text('name').notNull(),
 	userId: text('user_id').notNull().references(()=> user.id, { onDelete: 'cascade' }),
