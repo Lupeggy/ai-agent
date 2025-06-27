@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { agent, meeting } from "@/db/schemas";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
-import { agentInsertSchema, agentSchema } from "../schemas";
+import { agentInsertSchema, agentUpdateSchema } from "../schemas";
 import { DEFAULT_PAGE_SIZE } from "../constants";
 import { z } from "zod";
 import { and, eq, getTableColumns, ilike, sql } from "drizzle-orm";
@@ -82,5 +82,26 @@ export const agentsRouter = createTRPCRouter({
         .returning();
 
       return createAgent;
+    }),
+
+  update: protectedProcedure.input(agentUpdateSchema)
+    .mutation(async ({ input, ctx }) => {
+      const [updatedAgent] = await db
+        .update(agent)
+        .set(input)
+        .where(and(eq(agent.id, input.id), eq(agent.userId, ctx.auth.user.id)))
+        .returning();
+
+      return updatedAgent;
+    }),
+
+  remove: protectedProcedure.input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const [removedAgent] = await db
+        .delete(agent)
+        .where(and(eq(agent.id, input.id), eq(agent.userId, ctx.auth.user.id)))
+        .returning();
+
+      return removedAgent;
     }),
 });

@@ -1,30 +1,62 @@
 "use client";
 
-import { useTRPC } from "@/trpc/client";
+import { trpc } from "@/trpc/client";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { AgentIdViewHeader } from "../components/agent-id-view-header";
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { Badge } from "@/components/ui/badge";
 import { VideoIcon } from "lucide-react";
+import { useConfirm } from "@/hooks/use-confirm";
+import { toast } from "sonner";
+import { EditAgentDialog } from "../components/edit-agent-dialog";
 
 interface Props {
     agentId: string;
 };
 
 export const AgentIdView = ({ agentId }: Props) => {
-    const trpc = useTRPC();
     const router = useRouter();
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-    const { data } = useSuspenseQuery( trpc.agents.getOne.queryOptions({ id: agentId }));
+    const [data] = trpc.agents.getOne.useSuspenseQuery({ id: agentId });
+
+    const [RemoveConfirmation, confirmRemove] = useConfirm(
+        "Are you sure?",
+        `This will permanently delete the agent and ${data.meetingCount} associated meetings.`
+    );
+
+    const { mutate: removeAgent, isPending } = trpc.agents.remove.useMutation({
+        onSuccess: () => {
+            toast.success("Agent removed successfully.");
+            router.push("/agents");
+        },
+        onError: (error: any) => {
+            toast.error(error.message);
+        }
+    });
+
+    const handleRemoveAgent = async () => {
+        const confirmed = await confirmRemove();
+        if (!confirmed) return;
+        removeAgent({ id: agentId });
+    }
 
     return (
         <div className="flex flex-col h-screen">
+            <RemoveConfirmation />
+            <EditAgentDialog 
+                open={isEditDialogOpen}
+                onOpenChange={setIsEditDialogOpen}
+                agent={data}
+            />
             <AgentIdViewHeader
-            agentId={agentId}
-            agentName={data.name}
-            onEdit={() => router.push(`/agents/${agentId}/edit`)}
-            onDelete={() => router.push(`/agents/${agentId}/delete`)}
+                agentId={agentId}
+                agentName={data.name}
+                onEdit={() => setIsEditDialogOpen(true)}
+                onDelete={handleRemoveAgent}
+                isDeleting={isPending}
             />
             <div className="bg-white rounded-lg border">
                 <div className="px-4 py-5 gap-y-5 flex flex-col col-span-5">

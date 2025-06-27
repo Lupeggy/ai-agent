@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { useTRPC } from "@/trpc/client";
-import { useQuery } from "@tanstack/react-query";
+import { trpc } from "@/trpc/client";
 import { useAgentsFilter } from "../../hooks/use-agents-filter";
 import { ErrorState } from "@/components/error-state";
 import { useRouter } from "next/navigation";
@@ -66,13 +65,12 @@ export const AgentsView = () => {
 // Actual content component that only renders on the client
 const AgentsContent = () => {
   const router = useRouter();
-  const trpc = useTRPC();
+  
   const [filter, setFilter] = useAgentsFilter();
   const [isNewAgentDialogOpen, setIsNewAgentDialogOpen] = React.useState(false);
   
   // Use useQuery with consistent behavior
-  const { data: result, isLoading, isError, error } = useQuery({
-    ...trpc.agents.getMany.queryOptions(filter),
+    const { data: result, isLoading, isError, error } = trpc.agents.getMany.useQuery(filter, {
     // Don't throw errors so we can handle them gracefully
     throwOnError: false,
   });
