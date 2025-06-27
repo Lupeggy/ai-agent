@@ -5,11 +5,10 @@ import { ArrowLeft } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";
 import { useAgentsFilter } from "../../hooks/use-agents-filter";
-import { LoadingState } from "@/components/loading-state";
 import { ErrorState } from "@/components/error-state";
-import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { useRouter } from "next/navigation";
 import React, { Suspense } from "react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/modules/agents/ui/components/data-table";
 import { columns, Agent } from "@/modules/agents/ui/components/columns";
@@ -20,21 +19,40 @@ import { DataPagination } from "../components/data-pagination";
 import { Button } from "@/components/ui/button";
 import { ClientOnly } from "../client-only-view";
 
+
 export const AgentViewLoading = () => {
     return (
-        <div className="flex items-center justify-center h-screen">
-            <div className="text-lg text-gray-500">Loading agents...</div>
+        <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="bg-white rounded-xl shadow-lg px-8 py-10 flex flex-col items-center w-full max-w-xs">
+                <div className="h-12 w-12 rounded-full border-4 border-blue-600 border-t-transparent animate-spin mb-4"></div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading Agents</h2>
+                <p className="text-gray-500 text-center">Please wait while we retrieve your agents...</p>
+            </div>
         </div>
     );
 };
 
 export const AgentsViewError = () => {
     return (
-        <ErrorState 
-            title="Something went wrong"
-            description="Please try again later." />
+        <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="bg-white rounded-xl shadow-lg border border-red-100 px-8 py-10 flex flex-col items-center w-full max-w-md">
+                <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                    <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
+                <p className="text-gray-500 text-center mb-6">We couldn't load your agents. Please try again later.</p>
+                <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Try Again
+                </button>
+            </div>
+        </div>
     );
 };
+
+
+
 
 
 export const AgentsView = () => {
@@ -47,10 +65,10 @@ export const AgentsView = () => {
 
 // Actual content component that only renders on the client
 const AgentsContent = () => {
+  const router = useRouter();
   const trpc = useTRPC();
   const [filter, setFilter] = useAgentsFilter();
   const [isNewAgentDialogOpen, setIsNewAgentDialogOpen] = React.useState(false);
-  const router = useRouter();
   
   // Use useQuery with consistent behavior
   const { data: result, isLoading, isError, error } = useQuery({
@@ -63,7 +81,9 @@ const AgentsContent = () => {
   if (isLoading) {
     return <AgentViewLoading />;
   }
-  
+
+
+
   // Now that we're mounted on client, we can show different states
   // Handle unauthorized errors (user not logged in)
   if (isError && error?.message === 'Unauthorized') {
@@ -74,11 +94,6 @@ const AgentsContent = () => {
         <Button onClick={() => router.push('/login')}>Sign In</Button>
       </div>
     );
-  }
-
-  // Handle loading state
-  if (isLoading) {
-    return <AgentViewLoading />;
   }
 
   const handleAddNewAgent = () => setIsNewAgentDialogOpen(true);
@@ -138,7 +153,11 @@ const AgentsContent = () => {
         </div>
       ) : (
         <div className="mt-6">
-          <DataTable data={agents} columns={agentColumns} />
+          <DataTable 
+            data={agents} 
+            columns={agentColumns}
+            onRowClick={(row) => router.push(`/agents/${row.id}`)}
+            />
         </div>
       )}
       
@@ -154,19 +173,4 @@ const AgentsContent = () => {
   );
 };
 
-export default function AgentsPage() {
-  return (
-    <div className="container mx-auto py-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Link href="/dashboard" className="flex items-center text-blue-600 hover:underline">
-          <ArrowLeft size={16} className="mr-1" />
-          Back to Dashboard
-        </Link>
-      </div>
-      <h1 className="text-3xl font-bold mb-6">My Agents</h1>
-            <Suspense fallback={<AgentViewLoading />}>
-        <AgentsView />
-      </Suspense>
-    </div>
-  );
-}
+

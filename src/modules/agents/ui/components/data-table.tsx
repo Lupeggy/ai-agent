@@ -17,13 +17,15 @@ import {
 } from "@/components/ui/table"
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+  onRowClick?: (row: TData) => void;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -38,7 +40,8 @@ export function DataTable<TData, TValue>({
           table.getRowModel().rows.map((row, index) => (
             <div
               key={row.id}
-              className={`flex w-full ${index < table.getRowModel().rows.length - 1 ? 'border-b' : ''}`}>
+              onClick={() => onRowClick?.(row.original)}
+              className={`flex w-full ${index < table.getRowModel().rows.length - 1 ? 'border-b' : ''} ${onRowClick ? 'cursor-pointer hover:bg-muted/50' : ''}`}>
               {row.getVisibleCells().map((cell) => (
                 <div key={cell.id} className="flex-1">
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}

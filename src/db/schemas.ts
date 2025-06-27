@@ -55,3 +55,9 @@ export const agent = pgTable("agent", {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow()
 });
+
+export const meeting = pgTable("meeting", {
+	id: text('id').primaryKey().$defaultFn(()=> nanoid()),
+	agentId: text('agent_id').notNull().references(()=> agent.id, { onDelete: 'cascade' }),
+	createdAt: timestamp('created_at').notNull().defaultNow(),
+});
