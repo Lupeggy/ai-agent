@@ -1,9 +1,10 @@
 import { db } from "@/db";
 import { agent } from "@/db/schemas";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
-import { agentInsertSchema } from "../schemas";
+import { agentInsertSchema, agentSchema } from "../schemas";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, ilike, sql } from "drizzle-orm";
 // import { TRPCError } from "@trpc/server";
 
 export const agentsRouter = createTRPCRouter({
@@ -20,19 +21,41 @@ export const agentsRouter = createTRPCRouter({
     return existingAgent;
   }),
 
-  getMany: protectedProcedure.query(async () => {
-    const data = await db
-      .select()
-      .from(agent);
+  getMany: protectedProcedure
+    .input(
+      z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(DEFAULT_PAGE_SIZE),
+        search: z.string().nullish(),
+      }).optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const { page = 1, pageSize = DEFAULT_PAGE_SIZE, search } = input ?? {};
 
-    // await new Promise((resolve) => setTimeout(resolve, 1000));
-    // throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const whereClauses = [eq(agent.userId, ctx.auth.user.id)];
+      if (search) {
+        whereClauses.push(ilike(agent.name, `%${search}%`));
+      }
 
-    return data;
-  }),
+      const data = await db
+        .select()
+        .from(agent)
+        .where(and(...whereClauses))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize);
 
-  create: protectedProcedure
-    .input(agentInsertSchema)
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(agent)
+        .where(and(...whereClauses));
+
+      return {
+        data,
+        totalPages: Math.ceil(count / pageSize),
+      };
+    }),
+
+  create: protectedProcedure.input(agentInsertSchema)
     .mutation(async ({ input, ctx }) => {
       const [createAgent] = await db
         .insert(agent)
