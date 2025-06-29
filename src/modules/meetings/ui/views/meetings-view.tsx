@@ -5,7 +5,7 @@ import { trpc } from "@/trpc/client";
 import { DataPagination } from "@/modules/agents/ui/components/data-pagination";
 import { MeetingsGetMany } from "../../types";
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -15,9 +15,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PlusIcon, Video } from "lucide-react";
+import { Video, PlusIcon } from "lucide-react";
+import { useState } from "react";
+import { MeetingListHeader } from "../components/meeting-list-header";
+import { NewMeetingDialog } from "../components/new-meeting-dialog";
 
-const MeetingsList = ({ meetings }: { meetings: MeetingsGetMany[] }) => {
+const MeetingsList = ({ meetings, onAddNewMeeting }: { meetings: MeetingsGetMany[], onAddNewMeeting: () => void }) => {
   if (meetings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center h-[450px]">
@@ -28,9 +31,9 @@ const MeetingsList = ({ meetings }: { meetings: MeetingsGetMany[] }) => {
         <p className="mt-2 text-center text-sm leading-6 text-muted-foreground">
           You haven't created any meetings yet.
         </p>
-        <Link href="/meetings/create" className={cn(buttonVariants({variant: 'default'}), 'mt-6')}>
-            Create Meeting
-        </Link>
+        <Button onClick={onAddNewMeeting} className="mt-6">
+          Create Meeting
+        </Button>
       </div>
     );
   }
@@ -64,21 +67,30 @@ export const MeetingsView = () => {
   const searchParams = useSearchParams();
   const page = Number(searchParams.get("page") || 1);
   const search = searchParams.get("search") || "";
+  const [isNewMeetingDialogOpen, setIsNewMeetingDialogOpen] = useState(false);
 
   const { data, isLoading } = trpc.meetings.getMany.useQuery({ page, search });
 
+  const handleAddNewMeeting = () => {
+    setIsNewMeetingDialogOpen(true);
+  };
+
+  const totalMeetings = data?.data?.length || 0;
+
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meetings</h1>
-          <p className="text-muted-foreground">View and manage your meetings.</p>
-        </div>
-        <Link href="/meetings/create" className={cn(buttonVariants({variant: 'default'}))}>
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Create Meeting
-        </Link>
-      </header>
+      {/* New Meeting Dialog */}
+      <NewMeetingDialog 
+        open={isNewMeetingDialogOpen}
+        onOpenChange={setIsNewMeetingDialogOpen}
+      />
+
+      {/* Header with search and button */}
+      <MeetingListHeader 
+        totalMeetings={totalMeetings} 
+        onAddNewMeeting={handleAddNewMeeting}
+        searchValue={search}
+      />
 
       {isLoading && !data ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -87,7 +99,10 @@ export const MeetingsView = () => {
             ))}
         </div>
       ) : (
-        <MeetingsList meetings={data?.data ?? []} />
+        <MeetingsList 
+          meetings={data?.data ?? []} 
+          onAddNewMeeting={handleAddNewMeeting}
+        />
       )}
 
       {data && data.totalPages > 1 && (

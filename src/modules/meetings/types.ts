@@ -1,10 +1,14 @@
 export type MeetingsGetMany = {
   id: string;
   name: string;
-  status: "pending" | "in-progress" | "completed" | "failed";
-  createdAt: Date;
+  status: "upcoming" | "active" | "completed" | "processing" | "cancelled";
+  createdAt: Date | string;
+  updatedAt?: Date | string;
   userId: string;
   agentId: string;
-  startedAt: Date | null;
-  endedAt: Date | null;
+  startedAt: Date | string | null;
+  endedAt: Date | string | null;
+  transcript: string | null;
+  recordingUrl: string | null;
+  summary: string | null;
 };
