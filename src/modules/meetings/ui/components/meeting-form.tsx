@@ -3,7 +3,6 @@
 import { trpc } from "@/trpc/client";
 import { toast } from "sonner";
 import { z } from "zod";
-import { TRPCClientError } from "@trpc/client";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -26,39 +25,46 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { GeneratedAvatar } from "@/components/generated-avatar";
-import { MeetingsGetMany } from "../../types";
 import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { MeetingStatusBadge } from "./meeting-status-badge";
 
 interface MeetingFormProps {
-  onSuccess?: () => void;
+  onSubmit?: (values: any) => void;
   onCancel?: () => void;
-  initialValues?: MeetingsGetMany;
+  onSuccess?: () => void;
+  isSubmitting?: boolean;
+  submitLabel?: string;
+  defaultValues?: {
+    id?: string;
+    name?: string;
+    agentId?: string;
+    status?: string;
+  };
 }
 
 // Form component for creating or updating a meeting
 export const MeetingForm = ({
-  onSuccess,
+  onSubmit,
   onCancel,
-  initialValues,
+  isSubmitting = false,
+  submitLabel = "Create Meeting",
+  defaultValues = {},
 }: MeetingFormProps) => {
   const utils = trpc.useUtils();
   const { data: agents, isLoading: isLoadingAgents } = trpc.agents.getMany.useQuery({});
   const [searchQuery, setSearchQuery] = useState("");
   const [open, setOpen] = useState(false);
-
-  // Determine if we're editing an existing meeting
-  const isEdit = !!initialValues?.id;
-
+  
   // Create a form with validation
   const form = useForm<z.infer<typeof meetingInsertSchema>>({
     resolver: zodResolver(meetingInsertSchema),
     defaultValues: {
-      name: initialValues?.name || "",
-      agentId: initialValues?.agentId || "",
+      name: defaultValues?.name || "",
+      agentId: defaultValues?.agentId || "",
+      status: defaultValues?.status as any || "upcoming",
     },
   });
   
@@ -90,71 +96,26 @@ export const MeetingForm = ({
       return true; // All characters found in order
     });
   }, [agents?.data, searchQuery]);
-
-  const createMeetingMutation = trpc.meetings.create.useMutation({
-    onSuccess: async (data) => {
-      await utils.meetings.getMany.invalidate();
-      toast.success("Meeting created successfully!");
-      onSuccess?.();
-    },
-    onError: (error) => {
-      toast.error(`Failed to create meeting: ${error.message}`);
-    },
-  });
-
-  // Type error: meetings.update doesn't exist yet, uncomment when the procedure is implemented
-  /*
-  const updateMeetingMutation = trpc.meetings.update.useMutation({
-  */
-  /*  
-    onSuccess: async () => {
-      await utils.meetings.getMany.invalidate();
-      if (initialValues?.id) {
-        await utils.meetings.getOne.invalidate({ id: initialValues.id });
-      }
-      toast.success("Meeting updated successfully!");
-      onSuccess?.();
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update meeting: ${error.message}`);
-    },
-  });
-  */
-
-  // Handle the form submission
-  const handleSubmit = (data: z.infer<typeof meetingInsertSchema>) => {
-    if (isEdit) {
-      // Update functionality not implemented yet
-      // updateMeetingMutation.mutate({ ...data, id: initialValues.id });
-      toast.info("Update functionality not implemented yet");
-    } else {
-      createMeetingMutation.mutate(data);
+  
+  // Available meeting statuses
+  const statuses = [
+    { value: "upcoming", label: "Upcoming" },
+    { value: "active", label: "Active" },
+    { value: "completed", label: "Completed" },
+    { value: "processing", label: "Processing" },
+    { value: "cancelled", label: "Cancelled" }
+  ];
+  
+  // Handle form submission
+  const handleFormSubmit = async (data: z.infer<typeof meetingInsertSchema>) => {
+    if (onSubmit) {
+      onSubmit(data);
     }
   };
 
-  const isPending = createMeetingMutation.isPending; // || updateMeetingMutation.isPending;
-
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <div className="flex items-center gap-4 mb-6">
-          <GeneratedAvatar
-            seed={form.watch("name")}
-            variant="botttsNeutral"
-            className="w-12 h-12"
-          />
-          <div>
-            <h3 className="text-lg font-medium">
-              {isEdit ? "Edit Meeting" : "Create New Meeting"}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {isEdit
-                ? "Update your meeting details"
-                : "Enter a name for your meeting and select an agent to join."}
-            </p>
-          </div>
-        </div>
-
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
         <FormField
           control={form.control}
           name="name"
@@ -242,6 +203,45 @@ export const MeetingForm = ({
             </FormItem>
           )}
         />
+        
+        {/* Status selection field */}
+        <FormField
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <FormItem className="flex flex-col gap-2">
+              <FormLabel>Meeting Status</FormLabel>
+              <Select 
+                value={field.value} 
+                onValueChange={field.onChange}
+                disabled={isSubmitting}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a status">
+                      {field.value && (
+                        <div className="flex items-center gap-2">
+                          <MeetingStatusBadge status={field.value as any} />
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {statuses.map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      <div className="flex items-center gap-2">
+                        <MeetingStatusBadge status={status.value as any} />
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>Set the current status of this meeting</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <div className="flex justify-end gap-2 pt-4">
           {onCancel && (
@@ -249,16 +249,16 @@ export const MeetingForm = ({
               type="button"
               variant="outline"
               onClick={onCancel}
-              disabled={isPending}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
           )}
           <Button
             type="submit"
-            disabled={isPending || !form.formState.isDirty}
+            disabled={isSubmitting || !form.formState.isDirty}
           >
-            {isPending ? "Saving..." : isEdit ? "Update Meeting" : "Create Meeting"}
+            {isSubmitting ? "Saving..." : submitLabel}
           </Button>
         </div>
       </form>

@@ -15,3 +15,6 @@ export type MeetingsGetMany = {
   summary: string | null;
   agent?: Agent | null; // Add optional agent property
 };
+
+// Using the same type for individual meeting details
+export type MeetingsGetOne = MeetingsGetMany;

@@ -93,4 +93,74 @@ export const meetingsRouter = createTRPCRouter({
         totalPages: Math.ceil(total.count / limit),
       };
     }),
+    
+  update: protectedProcedure
+    .input(z.object({ 
+      id: z.string(),
+      name: z.string().min(1),
+      agentId: z.string().min(1),
+      status: z.enum(["upcoming", "active", "completed", "processing", "cancelled"]).optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { id, name, agentId, status } = input;
+
+      // Verify the meeting exists and belongs to the user
+      const [existingMeeting] = await db
+        .select({ id: meeting.id })
+        .from(meeting)
+        .where(and(eq(meeting.id, id), eq(meeting.userId, ctx.auth.user.id)));
+
+      if (!existingMeeting) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Meeting not found" });
+      }
+
+      // Verify the agent exists and belongs to the user if changing agent
+      if (agentId) {
+        const [existingAgent] = await db
+          .select({ id: agent.id })
+          .from(agent)
+          .where(and(eq(agent.id, agentId), eq(agent.userId, ctx.auth.user.id)));
+
+        if (!existingAgent) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
+        }
+      }
+
+      // Update the meeting
+      const [updatedMeeting] = await db
+        .update(meeting)
+        .set({
+          name,
+          agentId,
+          status,
+          updatedAt: new Date()
+        })
+        .where(and(eq(meeting.id, id), eq(meeting.userId, ctx.auth.user.id)))
+        .returning();
+
+      return updatedMeeting;
+    }),
+  
+  remove: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { id } = input;
+
+      // Verify the meeting exists and belongs to the user
+      const [existingMeeting] = await db
+        .select({ id: meeting.id })
+        .from(meeting)
+        .where(and(eq(meeting.id, id), eq(meeting.userId, ctx.auth.user.id)));
+
+      if (!existingMeeting) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Meeting not found" });
+      }
+
+      // Delete the meeting
+      await db
+        .delete(meeting)
+        .where(and(eq(meeting.id, id), eq(meeting.userId, ctx.auth.user.id)));
+
+      return { success: true };
+    }),
 });
