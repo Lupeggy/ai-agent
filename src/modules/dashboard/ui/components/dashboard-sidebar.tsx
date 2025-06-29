@@ -9,7 +9,7 @@ import { DashboardUserButton } from "./dashboard-user-button"
 import { useSidebar } from "@/components/ui/sidebar"
 
 const mainNav = [
-  { label: "Meetings", href: "/dashboard/meetings", icon: <Video size={20} /> },
+  { label: "Meetings", href: "/meetings", icon: <Video size={20} /> },
   { label: "Agents", href: "/agents", icon: <BotIcon size={20} /> },
 ]
 
