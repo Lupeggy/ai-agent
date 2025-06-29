@@ -1,3 +1,5 @@
+import { Agent } from "../agents/ui/components/columns";
+
 export type MeetingsGetMany = {
   id: string;
   name: string;
@@ -11,4 +13,5 @@ export type MeetingsGetMany = {
   transcript: string | null;
   recordingUrl: string | null;
   summary: string | null;
+  agent?: Agent | null; // Add optional agent property
 };
