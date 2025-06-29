@@ -186,9 +186,16 @@ export const MeetingForm = ({
                       className="w-full justify-between"
                       disabled={isLoadingAgents}
                     >
-                      {field.value
-                        ? agents?.data.find((agent) => agent.id === field.value)?.name
-                        : "Select an agent to join the meeting"}
+                      {field.value ? (
+                        <div className="flex items-center gap-2">
+                          <GeneratedAvatar 
+                            seed={field.value} 
+                            variant="botttsNeutral" 
+                            className="w-4 h-4" 
+                          />
+                          {agents?.data.find((agent) => agent.id === field.value)?.name}
+                        </div>
+                      ) : "Select an agent to join the meeting"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0" align="start" side="bottom">
@@ -211,12 +218,18 @@ export const MeetingForm = ({
                               setSearchQuery("");
                             }}
                           >
-                            <span className={cn(
-                              "mr-2",
-                              field.value === agent.id ? "font-medium" : "font-normal"
-                            )}>
-                              {agent.name}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <GeneratedAvatar 
+                                seed={agent.id} 
+                                variant="botttsNeutral" 
+                                className="w-4 h-4" 
+                              />
+                              <span className={cn(
+                                field.value === agent.id ? "font-medium" : "font-normal"
+                              )}>
+                                {agent.name}
+                              </span>
+                            </div>
                           </CommandItem>
                         ))}
                       </CommandGroup>

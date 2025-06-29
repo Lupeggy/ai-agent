@@ -51,10 +51,18 @@ export const MeetingsView = () => {
   const searchParams = useSearchParams();
   const page = Number(searchParams.get("page") || 1);
   const search = searchParams.get("search") || "";
+  const agentId = searchParams.get("agentId") || "";
+  const status = searchParams.get("status") || "";
   const [isNewMeetingDialogOpen, setIsNewMeetingDialogOpen] = useState(false);
 
   const { data, isLoading, isError, error } = trpc.meetings.getMany.useQuery(
-    { page, search },
+    { 
+      page, 
+      search, 
+      agentId: agentId || undefined, 
+      status: status as any || undefined,
+      pageSize: 10
+    },
     { throwOnError: false }
   );
 
@@ -91,6 +99,8 @@ export const MeetingsView = () => {
         totalMeetings={totalMeetings}
         onAddNewMeeting={handleAddNewMeeting}
         searchValue={search}
+        agentId={agentId}
+        status={status}
       />
       
       {/* Conditional content area */}

@@ -1,9 +1,9 @@
 "use client";
 
 import { trpc } from "@/trpc/client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MeetingStatusBadge } from "../components/meeting-status-badge";
 import { notFound, useRouter } from "next/navigation";
 import { ArrowLeft, Clock } from "lucide-react";
 import { GeneratedAvatar } from "@/components/generated-avatar";
@@ -51,16 +51,7 @@ export const MeetingIdView = ({ meetingId }: Props) => {
     durationText = `${durationMinutes} min`;
   }
   
-  // Format the status badge
-  const getStatusBadgeVariant = (status: string) => {
-    switch(status) {
-      case "upcoming": return "outline";
-      case "active": return "default";
-      case "completed": return "secondary";
-      case "cancelled": return "destructive";
-      default: return "outline";
-    }
-  };
+  // We'll use our custom MeetingStatusBadge instead
 
   return (
     <div className="space-y-6">
@@ -90,9 +81,7 @@ export const MeetingIdView = ({ meetingId }: Props) => {
 
           <div className="flex items-center gap-4">
             {/* Status badge */}
-            <Badge variant={getStatusBadgeVariant(meeting.status)} className="capitalize">
-              {meeting.status}
-            </Badge>
+            <MeetingStatusBadge status={meeting.status} />
 
             {/* Duration info */}
             <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 shadow-sm">

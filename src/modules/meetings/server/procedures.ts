@@ -53,16 +53,21 @@ export const meetingsRouter = createTRPCRouter({
       z.object({
         page: z.number().min(1).optional().default(1),
         search: z.string().optional().default(""),
+        pageSize: z.number().min(1).optional().default(DEFAULT_PAGE_SIZE),
+        agentId: z.string().nullish().optional(),
+        status: z.enum(["upcoming", "active", "completed", "processing", "cancelled"]).nullish()
       })
     )
     .query(async ({ input, ctx }) => {
-      const { page, search } = input;
-      const limit = DEFAULT_PAGE_SIZE;
+      const { page, search, agentId, status, pageSize } = input;
+      const limit = pageSize || DEFAULT_PAGE_SIZE;
       const offset = (page - 1) * limit;
 
       const where = and(
         eq(meeting.userId, ctx.auth.user.id),
-        search ? ilike(meeting.name, `%${search}%`) : undefined
+        search ? ilike(meeting.name, `%${search}%`) : undefined,
+        agentId ? eq(meeting.agentId, agentId) : undefined,
+        status ? eq(meeting.status, status) : undefined,
       );
 
       const meetingsPromise = db

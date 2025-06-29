@@ -4,10 +4,10 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Clock, Video } from "lucide-react";
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { format, formatDistanceToNow } from "date-fns";
-import { Badge } from "@/components/ui/badge";
 import { MeetingsGetMany } from "../../types";
 import { trpc } from "@/trpc/client";
 import { useState, useEffect } from "react";
+import { MeetingStatusBadge } from "./meeting-status-badge";
 
 // Create a separate agent display component that can fetch and display agent details
 const AgentDisplay = ({ agentId }: { agentId: string | undefined }) => {
@@ -50,16 +50,7 @@ export const columns: ColumnDef<MeetingsGetMany>[] = [
         durationText = `${durationMinutes} min`;
       }
       
-      // Format the status badge
-      const getStatusBadgeVariant = (status: string) => {
-        switch(status) {
-          case "upcoming": return "outline";
-          case "active": return "default";
-          case "completed": return "secondary";
-          case "cancelled": return "destructive";
-          default: return "outline";
-        }
-      };
+      // We'll use our custom MeetingStatusBadge instead of this logic
 
       return (
         <div className="flex items-center justify-between w-full p-4">
@@ -76,9 +67,7 @@ export const columns: ColumnDef<MeetingsGetMany>[] = [
           <div className="flex items-center gap-4">
             {/* Status badge */}
             <div className="flex items-center gap-2">
-              <Badge variant={getStatusBadgeVariant(meeting.status)} className="capitalize">
-                {meeting.status}
-              </Badge>
+              <MeetingStatusBadge status={meeting.status} />
             </div>
 
             {/* Duration info */}
