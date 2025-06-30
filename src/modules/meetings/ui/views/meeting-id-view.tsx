@@ -64,6 +64,13 @@ export const MeetingIdView = ({ meetingId }: Props) => {
     setDeleteDialogOpen(false);
   };
   
+  const isActive = meeting?.status === "active";
+  const isUpcoming = meeting?.status === "upcoming";
+  const isCompleted = meeting?.status === "completed";
+  const isProcessing = meeting?.status === "processing";
+  const isCancelled = meeting?.status === "cancelled";
+
+  
   // Handle edit button click
   const handleEdit = () => {
     setEditDialogOpen(true);
