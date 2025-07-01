@@ -1,0 +1,500 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useState } from "react";
+import { useCall, useCallStateHooks, ParticipantView } from "@stream-io/video-react-sdk";
+import "@stream-io/video-react-sdk/dist/css/styles.css";
+import { Mic, MicOff, Video, VideoOff, MonitorSmartphone, MessageSquare, Users, PhoneOff, CircleDot, Square, Smile, Subtitles, MoreVertical } from "lucide-react";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/trpc/routers/_app";
+
+// Define the meeting type to match what's being passed from call-view.tsx
+interface Meeting {
+  id: string;
+  name: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  userId: string;
+  agentId: string;
+  status: "upcoming" | "active" | "completed" | "processing" | "cancelled";
+  startedAt: Date | string | null;
+  endedAt: Date | string | null;
+  transcript: string | null;
+  recordingUrl: string | null;
+  summary: string | null;
+}
+
+interface CallUIProps {
+  meeting: Meeting | null;
+  onLeaveCall: () => void;
+  isAdmin: boolean;
+  initialCameraEnabled?: boolean;
+  initialMicrophoneEnabled?: boolean;
+}
+
+
+export const CallUI = ({ 
+  meeting, 
+  onLeaveCall, 
+  isAdmin, 
+  initialCameraEnabled = true,
+  initialMicrophoneEnabled = true 
+}: CallUIProps) => {
+  // Get the Stream call object from the context
+  const call = useCall();
+  const { useLocalParticipant, useRemoteParticipants } = useCallStateHooks();
+  const localParticipant = useLocalParticipant();
+  const remoteParticipants = useRemoteParticipants();
+
+  if (!call) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-6 max-w-md mx-auto">
+          <h2 className="text-xl font-bold mb-2">Call Connection Error</h2>
+          <p className="mb-4">Unable to connect to the call. Please try again.</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-primary text-white rounded-md"
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
+  const [micEnabled, setMicEnabled] = useState(initialMicrophoneEnabled);
+  const [cameraEnabled, setCameraEnabled] = useState(initialCameraEnabled);
+  const [shareScreen, setShareScreen] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showSubtitles, setShowSubtitles] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // Handle toggle mic
+  const toggleMic = async () => {
+    if (!call) return;
+    
+    try {
+      if (micEnabled) {
+        await call.microphone.disable();
+        setMicEnabled(false);
+      } else {
+        try {
+          // First check if we can get permission
+          if (navigator.permissions && navigator.permissions.query) {
+            const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            if (micPermission.state === 'denied') {
+              toast.error('Microphone permission denied. Please enable it in your browser settings.');
+              return;
+            }
+          }
+          
+          // Try to get audio permission if needed
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Now enable the microphone in the call
+            await call.microphone.enable();
+            setMicEnabled(true);
+          } catch (err) {
+            console.error('Could not get microphone permission:', err);
+            toast.error('Could not access microphone. Please check your browser settings.');
+          }
+        } catch (err) {
+          console.error('Error enabling microphone:', err);
+          toast.error('Failed to enable microphone');
+        }
+      }
+    } catch (error) {
+      console.error('Toggle mic error:', error);
+      toast.error('Failed to toggle microphone');
+    }
+  };
+
+  // Handle toggle camera
+  const toggleCamera = async () => {
+    if (!call) return;
+    
+    try {
+      if (cameraEnabled) {
+        await call.camera.disable();
+        setCameraEnabled(false);
+      } else {
+        try {
+          // First check if we can get permission
+          if (navigator.permissions && navigator.permissions.query) {
+            const cameraPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+            if (cameraPermission.state === 'denied') {
+              toast.error('Camera permission denied. Please enable it in your browser settings.');
+              return;
+            }
+          }
+          
+          // Try to get camera permission if needed
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Now enable the camera in the call
+            await call.camera.enable();
+            setCameraEnabled(true);
+          } catch (err) {
+            console.error('Could not get camera permission:', err);
+            toast.error('Could not access camera. Please check your browser settings.');
+          }
+        } catch (err) {
+          console.error('Error enabling camera:', err);
+          toast.error('Failed to enable camera');
+        }
+      }
+    } catch (error) {
+      console.error('Toggle camera error:', error);
+      toast.error('Failed to toggle camera');
+    }
+  };
+
+  // Handle screen share
+  const toggleScreenShare = async () => {
+    if (!call) return;
+    
+    try {
+      if (shareScreen) {
+        // Disable screen sharing
+        if (call.screenShare) {
+          await call.screenShare.disable();
+        }
+        setShareScreen(false);
+      } else {
+        // Enable screen sharing
+        if (call.screenShare) {
+          await call.screenShare.enable();
+        }
+        setShareScreen(true);
+      }
+    } catch (error) {
+      console.error('Screen share error:', error);
+      toast.error('Failed to toggle screen sharing');
+    }
+  };
+
+  // Handle recording
+  const toggleRecording = async () => {
+    if (!call) return;
+    
+    try {
+      if (isRecording) {
+        // Check if recording is supported
+        if (typeof call.stopRecording === 'function') {
+          await call.stopRecording();
+          setIsRecording(false);
+          toast.success('Recording stopped');
+        } else {
+          // Fallback for demo purposes
+          setIsRecording(false);
+          toast.success('Recording stopped (demo)');
+        }
+      } else {
+        // Check if recording is supported
+        if (typeof call.startRecording === 'function') {
+          await call.startRecording();
+          setIsRecording(true);
+          toast.success('Recording started');
+        } else {
+          // Fallback for demo purposes
+          setIsRecording(true);
+          toast.success('Recording started (demo)');
+        }
+      }
+    } catch (error) {
+      console.error('Recording error:', error);
+      toast.error('Failed to toggle recording');
+    }
+  };
+
+  // Toggle subtitles
+  const toggleSubtitles = () => {
+    const newState = !showSubtitles;
+    setShowSubtitles(newState);
+    toast.success(newState ? 'Subtitles enabled' : 'Subtitles disabled');
+    
+    // Here you would integrate with actual subtitle/transcription service
+    // This is just a UI demonstration
+  };
+
+  // Send emoji reaction
+  const sendEmoji = (emoji: string) => {
+    if (!call) return;
+    
+    try {
+      // Check if reaction API is supported
+      if (typeof call.sendReaction === 'function') {
+        // Send reaction using Stream's API
+        call.sendReaction({
+          type: 'emoji',
+          emoji_code: emoji
+        });
+      }
+      
+      // Always show feedback to user
+      toast.success(`Sent ${emoji} reaction`);
+      setShowEmojiPicker(false);
+    } catch (error) {
+      console.error('Emoji reaction error:', error);
+      toast.error('Failed to send reaction');
+    }
+  };
+
+  // Open leave confirmation dialog
+  const openLeaveConfirmation = () => {
+    setShowLeaveConfirmation(true);
+  };
+
+  // Handle leave call
+  const handleLeaveCall = async () => {
+    try {
+      // Close the dialog
+      setShowLeaveConfirmation(false);
+      
+      // Show recording notification
+      toast.info("Meeting conversation and script will be recorded");
+      
+      // Leave the call
+      if (call) {
+        await call.leave();
+      }
+      
+      // Notify the parent component to update meeting status to completed
+      onLeaveCall();
+      
+      // Wait briefly for the meeting status to be updated
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Redirect back to meeting view
+      if (meeting?.id) {
+        window.location.href = `/meetings/${meeting.id}`;
+      }
+    } catch (error) {
+      console.error("Error leaving call:", error);
+      toast.error("There was an error leaving the call");
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-[#1a1f2c] relative overflow-hidden">
+      {/* Header with title and options */}
+      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
+        <div className="text-white font-medium">
+          {meeting?.name || 'Video Call'}
+        </div>
+        <button className="text-white p-2 rounded-full hover:bg-white/10">
+          <MoreVertical size={20} />
+        </button>
+      </div>
+      
+      {/* Main content area with participants */}
+      <div className="flex-1 flex items-center justify-center relative">
+        {remoteParticipants.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 w-full h-full p-4">
+            {remoteParticipants.map((participant) => (
+              <div key={participant.sessionId} className="w-full h-full rounded-xl overflow-hidden">
+                <ParticipantView participant={participant} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center">
+            {/* User avatar circle when no video */}
+            <div className="w-24 h-24 rounded-full bg-purple-500 flex items-center justify-center text-white text-3xl font-semibold mb-4">
+              {localParticipant?.name?.[0]?.toUpperCase() || 'J'}
+            </div>
+            <div className="text-white/80 text-sm">
+              {localParticipant?.name || 'John Doe'}
+            </div>
+          </div>
+        )}
+        
+        {/* Local participant small view */}
+        {localParticipant && cameraEnabled && (
+          <div className="absolute bottom-24 right-4 w-32 h-24 rounded-lg overflow-hidden border-2 border-white/20">
+            <ParticipantView participant={localParticipant} />
+          </div>
+        )}
+      </div>
+      
+      {/* Status message */}
+      <div className="absolute bottom-20 left-0 right-0 flex justify-center">
+        <div className="bg-black/50 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-500"></span>
+          You are muted. Unmute to speak.
+        </div>
+      </div>
+      
+      {/* Subtitles overlay if enabled */}
+      {showSubtitles && (
+        <div className="absolute bottom-28 left-0 right-0 flex justify-center">
+          <div className="bg-black/70 text-white px-6 py-3 rounded-md max-w-lg text-center">
+            <p>This is where live subtitles would appear during the conversation.</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Call controls */}
+      <div className="bg-black/20 backdrop-blur-sm p-4 flex flex-wrap items-center justify-center gap-3 relative z-10">
+        <div className="flex items-center space-x-2">
+            {/* Mic toggle */}
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={toggleMic}
+              className={!micEnabled ? "bg-red-600 text-white hover:bg-red-700" : ""}
+              title="Toggle microphone"
+            >
+              {micEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+            </Button>
+            
+            {/* Camera toggle */}
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={toggleCamera}
+              className={!cameraEnabled ? "bg-red-600 text-white hover:bg-red-700" : ""}
+              title="Toggle camera"
+            >
+              {cameraEnabled ? <Video size={20} /> : <VideoOff size={20} />}
+            </Button>
+            
+            {/* Screen share */}
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={toggleScreenShare}
+              className={shareScreen ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+              title="Share screen"
+            >
+              <MonitorSmartphone size={20} />
+            </Button>
+            
+            {/* Recording */}
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={toggleRecording}
+              className={isRecording ? "bg-red-600 text-white hover:bg-red-700" : ""}
+              title="Record meeting"
+            >
+              {isRecording ? <Square size={20} /> : <CircleDot size={20} className="text-red-500" />}
+            </Button>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+            {/* Emoji reactions */}
+            <div className="relative">
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className={showEmojiPicker ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                title="Send reaction"
+              >
+                <Smile size={20} />
+              </Button>
+              
+              {/* Simple emoji picker */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-full mb-2 bg-white rounded-lg shadow-lg p-2 flex space-x-2">
+                  {['👍', '👏', '❤️', '😂', '😮'].map(emoji => (
+                    <button 
+                      key={emoji}
+                      onClick={() => sendEmoji(emoji)}
+                      className="text-xl hover:bg-gray-100 w-8 h-8 flex items-center justify-center rounded"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Subtitles */}
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={toggleSubtitles}
+              className={showSubtitles ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+              title="Toggle subtitles"
+            >
+              <Subtitles size={20} />
+            </Button>
+            
+            {/* Chat */}
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => setShowChat(!showChat)}
+              className={showChat ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+              title="Chat"
+            >
+              <MessageSquare size={20} />
+            </Button>
+            
+            {/* Participants */}
+            <Button 
+              variant="outline" 
+              size="icon"
+              title="Participants"
+            >
+              <Users size={20} />
+              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {remoteParticipants.length + 1}
+              </span>
+            </Button>
+        </div>
+        
+        <div className="flex items-center ml-2">
+            {/* End call button */}
+            <Button 
+              variant="destructive" 
+              onClick={openLeaveConfirmation}
+              size="sm"
+              className="px-3"
+            >
+              <PhoneOff size={16} className="mr-1" />
+              Leave
+            </Button>
+        </div>
+      </div>
+      
+      {/* Leave confirmation dialog */}
+      <Dialog open={showLeaveConfirmation} onOpenChange={setShowLeaveConfirmation}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Leave Meeting</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to leave this meeting? The conversation and script will be recorded.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-row justify-between sm:justify-between">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowLeaveConfirmation(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleLeaveCall}
+            >
+              Yes, Leave Meeting
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};

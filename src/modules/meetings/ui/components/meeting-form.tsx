@@ -49,6 +49,7 @@ interface MeetingFormProps {
 export const MeetingForm = ({
   onSubmit,
   onCancel,
+  onSuccess,
   isSubmitting = false,
   submitLabel = "Create Meeting",
   defaultValues = {},
@@ -64,7 +65,6 @@ export const MeetingForm = ({
     defaultValues: {
       name: defaultValues?.name || "",
       agentId: defaultValues?.agentId || "",
-      status: defaultValues?.status as any || "upcoming",
     },
   });
   
@@ -97,19 +97,28 @@ export const MeetingForm = ({
     });
   }, [agents?.data, searchQuery]);
   
-  // Available meeting statuses
-  const statuses = [
-    { value: "upcoming", label: "Upcoming" },
-    { value: "active", label: "Active" },
-    { value: "completed", label: "Completed" },
-    { value: "processing", label: "Processing" },
-    { value: "cancelled", label: "Cancelled" }
-  ];
+
+  
+  // Create meeting mutation
+  const { mutate: createMeeting, isPending: isCreating } = trpc.meetings.create.useMutation({
+    onSuccess: (data) => {
+      toast.success("Meeting created successfully");
+      utils.meetings.getMany.invalidate();
+      // Use the onSuccess prop if provided
+      if (onSuccess) onSuccess();
+    },
+    onError: (error) => {
+      toast.error(`Failed to create meeting: ${error.message}`);
+    }
+  });
   
   // Handle form submission
   const handleFormSubmit = async (data: z.infer<typeof meetingInsertSchema>) => {
     if (onSubmit) {
       onSubmit(data);
+    } else {
+      // If no onSubmit is provided, use the createMeeting mutation
+      createMeeting(data);
     }
   };
 
@@ -204,44 +213,7 @@ export const MeetingForm = ({
           )}
         />
         
-        {/* Status selection field */}
-        <FormField
-          control={form.control}
-          name="status"
-          render={({ field }) => (
-            <FormItem className="flex flex-col gap-2">
-              <FormLabel>Meeting Status</FormLabel>
-              <Select 
-                value={field.value} 
-                onValueChange={field.onChange}
-                disabled={isSubmitting}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a status">
-                      {field.value && (
-                        <div className="flex items-center gap-2">
-                          <MeetingStatusBadge status={field.value as any} />
-                        </div>
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {statuses.map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      <div className="flex items-center gap-2">
-                        <MeetingStatusBadge status={status.value as any} />
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>Set the current status of this meeting</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+
 
         <div className="flex justify-end gap-2 pt-4">
           {onCancel && (
@@ -256,9 +228,9 @@ export const MeetingForm = ({
           )}
           <Button
             type="submit"
-            disabled={isSubmitting || !form.formState.isDirty}
+            disabled={isSubmitting || isCreating || !form.formState.isDirty}
           >
-            {isSubmitting ? "Saving..." : submitLabel}
+            {isSubmitting || isCreating ? "Saving..." : submitLabel}
           </Button>
         </div>
       </form>

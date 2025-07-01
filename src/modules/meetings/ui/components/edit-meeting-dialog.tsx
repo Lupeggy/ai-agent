@@ -23,15 +23,11 @@ interface EditMeetingDialogProps {
 }
 
 export function EditMeetingDialog({ open, onOpenChange, meeting }: EditMeetingDialogProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  // Use TRPC directly as it's used in other components
   const utils = trpc.useContext();
-
-  const { mutate: updateMeeting } = trpc.meetings.update.useMutation({
-    onMutate: () => {
-      setIsLoading(true);
-    },
+  
+  const { mutate: updateMeeting, isPending: isLoading } = trpc.meetings.update.useMutation({
     onSuccess: () => {
-      setIsLoading(false);
       // Invalidate queries to refresh data
       utils.meetings.getOne.invalidate({ id: meeting.id });
       utils.meetings.getMany.invalidate();
@@ -40,7 +36,6 @@ export function EditMeetingDialog({ open, onOpenChange, meeting }: EditMeetingDi
       onOpenChange(false);
     },
     onError: (error) => {
-      setIsLoading(false);
       toast.error(error.message || "Failed to update meeting");
     }
   });

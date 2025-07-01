@@ -132,11 +132,11 @@ export const MeetingIdView = ({ meetingId }: Props) => {
           } : undefined}
           onStartMeeting={() => {
             toast.info("Starting meeting...");
-            // Implement start meeting functionality here
+            // Navigate to the call page
+            router.push(`/call/${meeting.id}`);
           }}
           onJoinMeeting={() => {
-            toast.info("Joining meeting...");
-            // Implement join meeting functionality here  
+            router.push(`/call/${meeting.id}`);
           }}
           onCancelMeeting={() => {
             toast.info("Cancelling meeting...");

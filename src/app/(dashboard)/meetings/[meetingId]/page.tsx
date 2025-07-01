@@ -7,12 +7,10 @@ interface PageProps {
   };
 }
 
-const MeetingPage = ({ params }: PageProps) => {
+export default async function MeetingPage({ params }: PageProps) {
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <MeetingIdView meetingId={params.meetingId} />
     </Suspense>
   );
-};
-
-export default MeetingPage;
+}
