@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import jwt from 'jsonwebtoken';
-import { StreamVideoClient } from '@stream-io/video-client';
+import { StreamClient } from "@stream-io/node-sdk";
 
 import { db } from "@/db";
 import { agent, meeting } from "@/db/schemas";
@@ -37,24 +37,11 @@ if (!STREAM_API_KEY || !STREAM_API_SECRET) {
 }
 
 // Initialize Stream Video client for server-side usage
-const createStreamClient = (token?: string) => {
-  return new StreamVideoClient({
-    apiKey: STREAM_API_KEY!,
-    // Use provided token or generate one via token provider
-    ...(token ? { token } : {
-      tokenProvider: async () => {
-        // Create a server-side token
-        const serverToken = jwt.sign(
-          {
-            user_id: 'server-admin',
-            exp: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour expiration
-          },
-          STREAM_API_SECRET!
-        );
-        return serverToken;
-      },
-    }),
-  });
+const createStreamClient = () => {
+  return new StreamClient(
+    STREAM_API_KEY!,
+    STREAM_API_SECRET!
+  );
 };
 
 // Helper function to handle Stream Video operations
@@ -62,36 +49,13 @@ const handleStreamCall = async (callId: string, operation: 'create' | 'end', mee
   try {
     console.log(`Handling Stream call for meeting ${callId}, operation: ${operation}`);
     
-    // Create a proper server token with call permissions
-    const serverToken = jwt.sign(
-      {
-        user_id: 'server-admin',
-        user_name: 'Server Admin',
-        exp: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour
-        iat: Math.floor(Date.now() / 1000) - 60, // 1 minute ago (for clock skew)
-        // Add call specific permissions
-        call: {
-          id: callId,
-          type: 'default',
-          role: 'admin',
-        }
-      },
-      STREAM_API_SECRET!
-    );
-    
-    // Create a client with the server token
-    const client = createStreamClient(serverToken);
-    
-    // We still need to call connectUser even when providing a token
-    await client.connectUser({
-      id: 'server-admin',
-      name: 'Server Admin'
-    });
+    // Create a client using the server-side SDK
+    const client = createStreamClient();
     
     console.log('Stream client connected successfully');
     
     // Get the call object
-    const call = client.call('default', callId);
+    const call = client.video.call('default', callId);
     
     try {
       if (operation === 'create') {
@@ -108,6 +72,7 @@ const handleStreamCall = async (callId: string, operation: 'create' | 'end', mee
         // Create or get the call with proper data
         await call.getOrCreate({
           data: {
+            created_by_id: 'server-admin', // Required when using server-side auth
             custom: {
               meetingId: callId,
               meetingName: meetingName || callId,
@@ -122,7 +87,7 @@ const handleStreamCall = async (callId: string, operation: 'create' | 'end', mee
         // End the call
         console.log(`Attempting to end call for meeting ${callId}`);
         try {
-          await call.endCall();
+          await call.end();
           console.log(`Stream call ended for meeting ${callId}`);
         } catch (endError: any) {
           // If the call doesn't exist or is already ended, just log it
@@ -133,9 +98,8 @@ const handleStreamCall = async (callId: string, operation: 'create' | 'end', mee
       console.error(`Error with Stream call operation ${operation}: ${error?.message || error}`);
     }
     
-    // Disconnect when done
-    await client.disconnectUser();
-    console.log('Stream client disconnected');
+    // No need to disconnect with the server-side SDK
+    console.log('Stream operation completed');
   } catch (error: any) {
     console.error(`Stream API error: ${error?.message || error}`);
   }
@@ -417,3 +381,4 @@ export const meetingsRouter = createTRPCRouter({
       }
     }),
 });
+

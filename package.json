@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "db:push": "drizzle-kit push --config=src/db/drizzle.config.ts",
-    "db:studio": "drizzle-kit studio --config=src/db/drizzle.config.ts --port 4984"
+    "db:studio": "drizzle-kit studio --config=src/db/drizzle.config.ts --port 4984",
+    "dev:webhook": "ngrok http --url=uniquely-brave-drum.ngrok-free.app 3000",
+    "test:webhook": "node scripts/test-webhook.js"
   },
   "dependencies": {
     "@dicebear/bottts-neutral": "^9.2.3",
@@ -28,6 +30,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@stream-io/node-sdk": "^0.4.25",
+    "@stream-io/openai-realtime-api": "^0.3.3",
     "@stream-io/video-client": "^1.25.1",
     "@stream-io/video-react-sdk": "^1.18.7",
     "@tanstack/react-query": "^5.81.2",
@@ -49,6 +52,7 @@
     "lucide-react": "^0.522.0",
     "next": "15.3.4",
     "next-themes": "^0.4.6",
+    "node-fetch": "^3.3.2",
     "nuqs": "^2.4.3",
     "pg": "^8.16.2",
     "postgres": "^3.4.7",

@@ -192,8 +192,63 @@ export const CallConnect = ({
     
     let _call: Call | undefined;
     let isActive = true;
+    let aiAgentCheckInterval: NodeJS.Timeout | null = null;
 
     console.log('Client is available, attempting to create or join call');
+    
+    // Function to check if AI agent is connected and send wake-up if needed
+    const checkAIAgentConnection = async (call: Call, meetingId: string) => {
+      try {
+        // Get meeting details to check for AI agent
+        const response = await fetch(`/api/meetings/${meetingId}`);
+        const meetingData = await response.json();
+        
+        if (meetingData?.agentId) {
+          console.log('Meeting has AI agent with ID:', meetingData.agentId);
+          
+          // Check if AI agent is in the participants list
+          const participants = call.state.participants;
+          const aiAgentParticipant = Object.values(participants).find(p => 
+            p.userId && (p.userId === meetingData.agentId || p.userId.includes(meetingData.agentId)));
+          
+          if (aiAgentParticipant) {
+            console.log('✅ AI agent found in participants:', aiAgentParticipant.userId);
+            
+            // Check if AI agent has audio tracks
+            const hasAudioTracks = Array.isArray(aiAgentParticipant.publishedTracks) && 
+              aiAgentParticipant.publishedTracks.some((track: any) => {
+                // Safely check if the track is an audio track
+                return typeof track === 'string' && track.indexOf('audio') >= 0;
+              });
+            
+            if (!hasAudioTracks) {
+              console.log('⚠️ AI agent has no audio tracks, sending wake-up signal...');
+              
+              // Send wake-up event
+              try {
+                await call.sendCustomEvent({
+                  type: 'agent-wake-up',
+                  data: { 
+                    timestamp: Date.now(),
+                    message: 'IMPORTANT: You must respond VERBALLY with your voice immediately. The user can hear you and is waiting for your verbal response. Say hello and introduce yourself.',
+                    requireVerbalResponse: true
+                  },
+                });
+                console.log('✅ Wake-up event sent to AI agent');
+              } catch (error) {
+                console.error('❌ Failed to send wake-up event:', error);
+              }
+            } else {
+              console.log('✅ AI agent has audio tracks');
+            }
+          } else {
+            console.log('⚠️ AI agent not found in participants, waiting...');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error checking AI agent connection:', error);
+      }
+    };
     
     const createOrJoinCall = async () => {
       try {
@@ -214,6 +269,26 @@ export const CallConnect = ({
         _call.on('call.live_started', () => {
           console.log('Call is now live');
           toast.success('Call is now live');
+          
+          // When call goes live, try to wake up the AI agent
+          setTimeout(async () => {
+            if (!_call) return;
+            
+            try {
+              console.log('Call is live, sending wake-up event to AI agent...');
+              await _call.sendCustomEvent({
+                type: 'agent-wake-up',
+                data: { 
+                  timestamp: Date.now(),
+                  message: 'IMPORTANT: You must respond VERBALLY with your voice immediately. The user can hear you and is waiting for your verbal response. Say hello and introduce yourself.',
+                  requireVerbalResponse: true
+                },
+              });
+              console.log('✅ Wake-up event sent to AI agent on call live');
+            } catch (error) {
+              console.error('❌ Failed to send wake-up event on call live:', error);
+            }
+          }, 2000);
         });
         
         _call.on('call.session_started', () => {
@@ -222,6 +297,33 @@ export const CallConnect = ({
         
         _call.on('call.session_ended', () => {
           console.log('Call session ended');
+        });
+        
+        // Listen for transcription events to ensure AI agent is responding
+        _call.on('call.transcription_ready', (event: any) => {
+          console.log('Transcription received:', event);
+          
+          // If this is a user's transcription, make sure AI agent responds
+          if (event?.transcription?.user?.id === userId) {
+            setTimeout(async () => {
+              if (!_call) return;
+              
+              try {
+                console.log('User spoke, ensuring AI agent responds...');
+                await _call.sendCustomEvent({
+                  type: 'agent-respond',
+                  data: { 
+                    timestamp: Date.now(),
+                    message: 'The user just spoke to you. You must respond VERBALLY to what they said.',
+                    requireVerbalResponse: true,
+                    transcription: event?.transcription?.text || ''
+                  },
+                });
+              } catch (error) {
+                console.error('❌ Failed to send response event:', error);
+              }
+            }, 500);
+          }
         });
         
         // Add general error handling
@@ -259,6 +361,91 @@ export const CallConnect = ({
             ring: false,
             // We'll enable audio and video separately after joining if permissions are available
           });
+          
+          // Wait a moment for the call to fully initialize
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Send a wake-up event to the AI agent
+          try {
+            console.log('Sending wake-up event to AI agent...');
+            await _call.sendCustomEvent({
+              type: 'agent-wake-up',
+              data: { 
+                timestamp: Date.now(),
+                message: 'IMPORTANT: You must respond VERBALLY with your voice immediately. The user can hear you and is waiting for your verbal response. Say hello and introduce yourself.',
+                requireVerbalResponse: true
+              },
+            });
+            console.log('✅ Wake-up event sent to AI agent');
+            
+            // Also try to notify the webhook directly
+            try {
+              await fetch('/api/webhook', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-signature': 'internal-call',
+                  'x-api-key': process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY || ''
+                },
+                body: JSON.stringify({
+                  type: 'call.session_participant_joined',
+                  call_cid: `default:${meetingId}`,
+                  session_id: meetingId,
+                  participant: {
+                    user: {
+                      id: userId
+                    }
+                  }
+                })
+              });
+              console.log('✅ Webhook notified about participant joined');
+            } catch (webhookError) {
+              console.error('❌ Failed to notify webhook about participant joined:', webhookError);
+            }
+          } catch (wakeupError) {
+            console.error('❌ Failed to send wake-up event:', wakeupError);
+          }
+          
+          // Enable speech-to-text transcription to allow AI agent to hear and respond
+          try {
+            console.log('Enabling speech-to-text transcription...');
+            await _call.startTranscription();
+            console.log('✅ Speech-to-text transcription enabled');
+            toast.success('Speech recognition enabled for AI assistant');
+            
+            // Send a notification to the webhook that transcription is ready
+            // This helps ensure the AI agent knows to listen for transcriptions
+            try {
+              console.log('Notifying webhook that transcription is ready...');
+              await fetch('/api/webhook', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-signature': 'internal-call',
+                  'x-api-key': process.env.NEXT_PUBLIC_STREAM_VIDEO_API_KEY || ''
+                },
+                body: JSON.stringify({
+                  type: 'call.transcription_ready',
+                  call_cid: `default:${meetingId}`,
+                  session_id: meetingId,
+                  transcription: {
+                    text: 'Transcription system initialized',
+                    user: {
+                      id: userId,
+                      name: userName
+                    }
+                  }
+                })
+              });
+              console.log('✅ Webhook notified about transcription');
+            } catch (webhookError) {
+              console.error('❌ Failed to notify webhook:', webhookError);
+            }
+          } catch (transcriptionError) {
+            console.error('❌ Failed to enable transcription:', transcriptionError);
+            toast.error('Failed to enable speech recognition. AI agent may not hear you.');
+            // Continue with call even if transcription fails
+          }
         } catch (joinError) {
           console.error('Error joining call:', joinError);
           toast.error('Failed to join call. Please try again.');
@@ -307,10 +494,31 @@ export const CallConnect = ({
       }
     };
 
-    createOrJoinCall();
+    createOrJoinCall().then(() => {
+      if (_call && isActive) {
+        // Set up an interval to check AI agent connection status
+        aiAgentCheckInterval = setInterval(() => {
+          if (_call) {
+            checkAIAgentConnection(_call, meetingId);
+          }
+        }, 10000); // Check every 10 seconds
+        
+        // Do an initial check after 5 seconds
+        setTimeout(() => {
+          if (_call && isActive) {
+            checkAIAgentConnection(_call, meetingId);
+          }
+        }, 5000);
+      }
+    });
 
     return () => {
       isActive = false;
+      
+      // Clear the interval if it exists
+      if (aiAgentCheckInterval) {
+        clearInterval(aiAgentCheckInterval);
+      }
       
       // Use the local _call reference to ensure we're leaving the correct call
       if (_call && _call.state.callingState !== CallingState.LEFT) {

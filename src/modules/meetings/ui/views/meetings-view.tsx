@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
@@ -109,7 +110,7 @@ export const MeetingsView = () => {
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 mb-6">
             <Video className="w-10 h-10 text-slate-500" />
           </div>
-          <h2 className="text-2xl font-semibold text-slate-800 mb-2">No Meetings Found</h2>
+          <h2 className="text-2xl font-semibold text-slate-800 mb-2">No meetings found!</h2>
           <p className="text-base text-slate-600 mb-8 max-w-xs text-center">
             Create your first meeting to get started!
           </p>

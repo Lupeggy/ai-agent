@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCall, useCallStateHooks, ParticipantView } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
-import { Mic, MicOff, Video, VideoOff, MonitorSmartphone, MessageSquare, Users, PhoneOff, CircleDot, Square, Smile, Subtitles, MoreVertical } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, MonitorSmartphone, MessageSquare, Users, PhoneOff, CircleDot, Square, Smile, Subtitles, MoreVertical, Maximize, Minimize, Loader } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/trpc/routers/_app";
 
@@ -48,8 +48,34 @@ export const CallUI = ({
   const { useLocalParticipant, useRemoteParticipants } = useCallStateHooks();
   const localParticipant = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
+  const callContainerRef = useRef<HTMLDivElement>(null);
   
-  // Log meeting data to help debug AI agent integration
+  // Toggle fullscreen function
+  const toggleFullscreen = () => {
+    if (!callContainerRef.current) return;
+    
+    if (!isFullscreen) {
+      if (callContainerRef.current.requestFullscreen) {
+        callContainerRef.current.requestFullscreen();
+      } else if ((callContainerRef.current as any).webkitRequestFullscreen) {
+        (callContainerRef.current as any).webkitRequestFullscreen();
+      } else if ((callContainerRef.current as any).msRequestFullscreen) {
+        (callContainerRef.current as any).msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  };
+
+  // Log meeting data and check for AI agent
   useEffect(() => {
     if (meeting) {
       console.log("Meeting data loaded for Stream.io:", { 
@@ -63,11 +89,27 @@ export const CallUI = ({
       // Check if the meeting has an associated agent
       if (meeting.agentId) {
         console.log("Meeting has an associated AI agent with ID:", meeting.agentId);
+        setWaitingForAgent(true);
+        
+        // Check if the AI agent is in the participants list
+        const aiAgentParticipant = remoteParticipants.find(p => 
+          p.userId && p.userId.includes(meeting.agentId));
+          
+        if (aiAgentParticipant) {
+          console.log("✅ AI agent found in participants:", aiAgentParticipant.userId);
+          setAgentJoined(true);
+          setWaitingForAgent(false);
+        } else {
+          console.log("⏳ AI agent not yet visible in participants list, should join soon");
+          setAgentJoined(false);
+          // Keep waiting state true
+        }
       } else {
         console.warn("Meeting does not have an associated AI agent! This is likely why the agent isn't joining.");
+        setWaitingForAgent(false); // No agent to wait for
       }
     }
-  }, [meeting]);
+  }, [meeting, remoteParticipants]);
 
   if (!call) {
     return (
@@ -94,6 +136,10 @@ export const CallUI = ({
   const [isRecording, setIsRecording] = useState(false);
   const [showSubtitles, setShowSubtitles] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [agentJoined, setAgentJoined] = useState(false);
+  const [waitingForAgent, setWaitingForAgent] = useState(true);
+  const callContainerRef = useRef<HTMLDivElement>(null);
 
   // Handle toggle mic
   const toggleMic = async () => {
@@ -242,9 +288,14 @@ export const CallUI = ({
       } else {
         // Check if recording is supported
         if (typeof call.startRecording === 'function') {
-          await call.startRecording();
-          setIsRecording(true);
-          toast.success('Recording started');
+          try {
+            await call.startRecording();
+            setIsRecording(true);
+            toast.success('Recording started');
+          } catch (recordingError) {
+            console.error('Recording error:', recordingError);
+            toast.error('Failed to start recording: ' + (recordingError instanceof Error ? recordingError.message : 'Unknown error'));
+          }
         } else {
           // Fallback for demo purposes
           setIsRecording(true);
@@ -337,29 +388,6 @@ export const CallUI = ({
         </button>
       </div>
       
-      {/* Main content area with participants */}
-      <div className="flex-1 flex items-center justify-center relative">
-        {remoteParticipants.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 w-full h-full p-4">
-            {remoteParticipants.map((participant) => (
-              <div key={participant.sessionId} className="w-full h-full rounded-xl overflow-hidden">
-                <ParticipantView participant={participant} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center">
-            {/* User avatar circle when no video */}
-            <div className="w-24 h-24 rounded-full bg-purple-500 flex items-center justify-center text-white text-3xl font-semibold mb-4">
-              {localParticipant?.name?.[0]?.toUpperCase() || 'J'}
-            </div>
-            <div className="text-white/80 text-sm">
-              {localParticipant?.name || 'John Doe'}
-            </div>
-          </div>
-        )}
-        
-        {/* Local participant small view */}
         {localParticipant && cameraEnabled && (
           <div className="absolute bottom-24 right-4 w-32 h-24 rounded-lg overflow-hidden border-2 border-white/20">
             <ParticipantView participant={localParticipant} />
@@ -384,8 +412,8 @@ export const CallUI = ({
         </div>
       )}
       
-      {/* Call controls */}
-      <div className="bg-black/20 backdrop-blur-sm p-4 flex flex-wrap items-center justify-center gap-3 relative z-10">
+      {/* Call controls - fixed at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-4 flex items-center justify-between gap-3 z-10">
         <div className="flex items-center space-x-2">
             {/* Mic toggle */}
             <Button 
@@ -538,3 +566,4 @@ export const CallUI = ({
     </div>
   );
 };
+
