@@ -326,7 +326,7 @@ export const CallUI = ({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#1a1f2c] relative overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#111622] relative overflow-hidden">
       {/* Header with title and options */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
         <div className="text-white font-medium">
@@ -337,122 +337,119 @@ export const CallUI = ({
         </button>
       </div>
       
-      {/* Main content area with participants */}
-      <div className="flex-1 flex items-center justify-center relative">
-        {remoteParticipants.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 w-full h-full p-4">
-            {remoteParticipants.map((participant) => (
-              <div key={participant.sessionId} className="w-full h-full rounded-xl overflow-hidden">
-                <ParticipantView participant={participant} />
+      {/* Main content area with AI agent on top and user at bottom */}
+      <div className="flex-1 flex flex-col h-full justify-center items-center py-6">
+        {/* AI Agent - Large display on top */}
+        <div className="w-[100%] max-w-4xl h-[520px] aspect-video mb-6 border border-gray-400/30 bg-[#212a3e] rounded-xl overflow-hidden relative">
+          {remoteParticipants.length > 0 ? (
+            <div className="w-full h-full">
+              {remoteParticipants.map((participant) => (
+                <div key={participant.sessionId} className="w-full h-full">
+                  <ParticipantView participant={participant} />
+                  
+                  {/* AI Agent name overlay */}
+                  <div className="absolute bottom-4 left-4 bg-black/50 text-white px-3 py-1 rounded-md flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <span>{participant.name || 'AI Agent'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full bg-gray-800">
+              {/* AI Agent avatar when not connected */}
+              <div className="w-32 h-32 rounded-full bg-red-500 flex items-center justify-center text-white text-4xl font-semibold mb-4">
+                AI
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center">
-            {/* User avatar circle when no video */}
-            <div className="w-24 h-24 rounded-full bg-purple-500 flex items-center justify-center text-white text-3xl font-semibold mb-4">
-              {localParticipant?.name?.[0]?.toUpperCase() || 'J'}
+              <div className="text-white/80 text-lg">
+                AI Agent not connected
+              </div>
             </div>
-            <div className="text-white/80 text-sm">
-              {localParticipant?.name || 'John Doe'}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
         
-        {/* Local participant small view */}
-        {localParticipant && cameraEnabled && (
-          <div className="absolute bottom-24 right-4 w-32 h-24 rounded-lg overflow-hidden border-2 border-white/20">
-            <ParticipantView participant={localParticipant} />
-          </div>
-        )}
-      </div>
-      
-      {/* Status message */}
-      <div className="absolute bottom-20 left-0 right-0 flex justify-center">
-        <div className="bg-black/50 text-white text-xs px-4 py-2 rounded-full flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500"></span>
-          You are muted. Unmute to speak.
+        {/* User video - Small display at bottom */}
+        <div className="w-[30%] max-w-xs h-[200px] border border-gray-400/30 rounded-xl overflow-hidden relative">
+          {localParticipant && (
+            <div className="absolute inset-0">
+              {cameraEnabled ? (
+                <div className="w-full h-full">
+                  <ParticipantView participant={localParticipant} />
+                  
+                  {/* User name overlay */}
+                  <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded-md text-sm flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                    <span>{localParticipant.name || 'You'}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full bg-gray-800">
+                  <div className="w-16 h-16 rounded-full bg-purple-500 flex items-center justify-center text-white text-xl font-semibold">
+                    {localParticipant?.name?.[0]?.toUpperCase() || 'Y'}
+                  </div>
+                  <div className="text-white/80 text-sm mt-1">
+                    {localParticipant?.name || 'You'} (Camera off)
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Subtitles overlay if enabled */}
-      {showSubtitles && (
-        <div className="absolute bottom-28 left-0 right-0 flex justify-center">
-          <div className="bg-black/70 text-white px-6 py-3 rounded-md max-w-lg text-center">
-            <p>This is where live subtitles would appear during the conversation.</p>
+      {/* Mute notification */}
+      {!micEnabled && (
+        <div className="fixed bottom-20 left-0 right-0 flex justify-center z-20">
+          <div className="bg-gray-500/65 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+            <MicOff size={16} />
+            <span>You are muted. Unmute to speak.</span>
           </div>
         </div>
       )}
       
-      {/* Call controls */}
-      <div className="bg-black/20 backdrop-blur-sm p-4 flex flex-wrap items-center justify-center gap-3 relative z-10">
-        <div className="flex items-center space-x-2">
+      {/* Call controls - Centered and aligned with device */}
+      <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-6 pt-2 z-10">
+        <div className="w-[90%] max-w-4xl mx-auto">
+          <div className="bg-black rounded-full flex items-center justify-evenly px-6 py-3 shadow-lg">
             {/* Mic toggle */}
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="icon" 
               onClick={toggleMic}
-              className={!micEnabled ? "bg-red-600 text-white hover:bg-red-700" : ""}
-              title="Toggle microphone"
+              className={!micEnabled ? "bg-red-600 text-white hover:bg-red-700 rounded-full" : "text-white hover:bg-gray-800 rounded-full"}
             >
               {micEnabled ? <Mic size={20} /> : <MicOff size={20} />}
             </Button>
             
             {/* Camera toggle */}
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="icon" 
               onClick={toggleCamera}
-              className={!cameraEnabled ? "bg-red-600 text-white hover:bg-red-700" : ""}
-              title="Toggle camera"
+              className={!cameraEnabled ? "bg-red-600 text-white hover:bg-red-700 rounded-full" : "text-white hover:bg-gray-800 rounded-full"}
             >
               {cameraEnabled ? <Video size={20} /> : <VideoOff size={20} />}
             </Button>
             
-            {/* Screen share */}
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={toggleScreenShare}
-              className={shareScreen ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
-              title="Share screen"
-            >
-              <MonitorSmartphone size={20} />
-            </Button>
-            
-            {/* Recording */}
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={toggleRecording}
-              className={isRecording ? "bg-red-600 text-white hover:bg-red-700" : ""}
-              title="Record meeting"
-            >
-              {isRecording ? <Square size={20} /> : <CircleDot size={20} className="text-red-500" />}
-            </Button>
-        </div>
-        
-        <div className="flex items-center space-x-2">
             {/* Emoji reactions */}
             <div className="relative">
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="icon"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className={showEmojiPicker ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
-                title="Send reaction"
+                className={showEmojiPicker ? "bg-gray-700 text-white rounded-full" : "text-white hover:bg-gray-800 rounded-full"}
               >
                 <Smile size={20} />
               </Button>
               
               {/* Simple emoji picker */}
               {showEmojiPicker && (
-                <div className="absolute bottom-full mb-2 bg-white rounded-lg shadow-lg p-2 flex space-x-2">
+                <div className="absolute bottom-full mb-2 bg-gray-800 rounded-lg shadow-lg p-2 flex space-x-2">
                   {['👍', '👏', '❤️', '😂', '😮'].map(emoji => (
                     <button 
                       key={emoji}
                       onClick={() => sendEmoji(emoji)}
-                      className="text-xl hover:bg-gray-100 w-8 h-8 flex items-center justify-center rounded"
+                      className="text-xl hover:bg-gray-700 w-8 h-8 flex items-center justify-center rounded"
                     >
                       {emoji}
                     </button>
@@ -461,52 +458,36 @@ export const CallUI = ({
               )}
             </div>
             
-            {/* Subtitles */}
+            {/* Screen share */}
             <Button 
-              variant="outline" 
-              size="icon"
-              onClick={toggleSubtitles}
-              className={showSubtitles ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
-              title="Toggle subtitles"
+              variant="ghost" 
+              size="icon" 
+              onClick={toggleScreenShare}
+              className={shareScreen ? "bg-gray-700 text-white rounded-full" : "text-white hover:bg-gray-800 rounded-full"}
             >
-              <Subtitles size={20} />
+              <MonitorSmartphone size={20} />
             </Button>
             
-            {/* Chat */}
+            {/* Recording */}
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="icon"
-              onClick={() => setShowChat(!showChat)}
-              className={showChat ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
-              title="Chat"
+              onClick={toggleRecording}
+              className={isRecording ? "bg-red-600 text-white hover:bg-red-700 rounded-full" : "text-white hover:bg-gray-800 rounded-full"}
             >
-              <MessageSquare size={20} />
+              {isRecording ? <Square size={20} /> : <CircleDot size={20} className="text-red-500" />}
             </Button>
             
-            {/* Participants */}
-            <Button 
-              variant="outline" 
-              size="icon"
-              title="Participants"
-            >
-              <Users size={20} />
-              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {remoteParticipants.length + 1}
-              </span>
-            </Button>
-        </div>
-        
-        <div className="flex items-center ml-2">
             {/* End call button */}
             <Button 
               variant="destructive" 
               onClick={openLeaveConfirmation}
-              size="sm"
-              className="px-3"
+              className="rounded-md px-4"
             >
-              <PhoneOff size={16} className="mr-1" />
-              Leave
+              <PhoneOff size={18} className="mr-1" />
+              <span>End Call</span>
             </Button>
+          </div>
         </div>
       </div>
       
