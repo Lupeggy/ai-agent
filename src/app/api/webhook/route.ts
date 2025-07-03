@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
             await db
                 .update(meeting)
                 .set({ 
-                    status: "completed",
+                    status: "processing",
                     endedAt: new Date(),
                 })
                 .where(eq(meeting.id, meetingId));
@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
             await db
                 .update(meeting)
                 .set({ 
-                    status: "completed",
+                    status: "processing",
                     endedAt: new Date(),
                 })
                 .where(eq(meeting.id, meetingId));
@@ -323,7 +323,7 @@ export async function POST(req: NextRequest) {
                 
                 const [updatedMeeting] = await db
                     .update(meeting)
-                    .set({ 
+                    .set({
                         transcript: transcriptUrl,
                         updatedAt: new Date()
                     })
