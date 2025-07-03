@@ -68,6 +68,36 @@ export const CallUI = ({
       }
     }
   }, [meeting]);
+  
+  // Start recording automatically when the component mounts
+  useEffect(() => {
+    const startAutomaticRecording = async () => {
+      if (!call) return;
+      
+      try {
+        // Check if recording is supported
+        if (typeof call.startRecording === 'function') {
+          await call.startRecording();
+          setIsRecording(true);
+          toast.success('Recording started automatically');
+        } else {
+          // Fallback for demo purposes
+          setIsRecording(true);
+          toast.success('Recording started automatically (demo)');
+        }
+      } catch (error) {
+        console.error('Automatic recording error:', error);
+        toast.error('Failed to start automatic recording');
+      }
+    };
+    
+    // Start recording after a short delay to ensure the call is fully connected
+    const timer = setTimeout(() => {
+      startAutomaticRecording();
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [call]);
 
   if (!call) {
     return (
@@ -327,6 +357,13 @@ export const CallUI = ({
 
   return (
     <div className="flex flex-col h-screen bg-[#111622] relative overflow-hidden">
+      {/* Recording notification banner */}
+      <div className="bg-red-600 text-white py-2 px-4 text-center text-sm">
+        <span className="flex items-center justify-center gap-2">
+          <CircleDot size={16} className="animate-pulse" /> This meeting is being recorded and will be saved
+        </span>
+      </div>
+      
       {/* Header with title and options */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
         <div className="text-white font-medium">

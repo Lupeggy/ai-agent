@@ -1,13 +1,15 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Clock, Video } from "lucide-react";
+import { Clock, Video, Calendar } from "lucide-react";
 import { GeneratedAvatar } from "@/components/generated-avatar";
 import { format, formatDistanceToNow } from "date-fns";
 import { MeetingsGetMany } from "../../types";
 import { trpc } from "@/trpc/client";
 import { useState, useEffect } from "react";
 import { MeetingStatusBadge } from "./meeting-status-badge";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 // Create a separate agent display component that can fetch and display agent details
 const AgentDisplay = ({ agentId }: { agentId: string | undefined }) => {
@@ -31,12 +33,20 @@ const AgentDisplay = ({ agentId }: { agentId: string | undefined }) => {
   );
 };
 
+// Format date in a consistent way
+const formatDate = (date: Date | string | null) => {
+  if (!date) return "";
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  return format(dateObj, "MMM d, yyyy 'at' h:mm a");
+};
+
 export const columns: ColumnDef<MeetingsGetMany>[] = [
   {
     id: 'meetingDetails',
     // We use a custom cell renderer for the entire row's content
     cell: ({ row }) => {
       const meeting = row.original;
+      const router = useRouter();
 
       // Determine the duration display
       const hasDuration = meeting.startedAt && meeting.endedAt;
@@ -50,10 +60,18 @@ export const columns: ColumnDef<MeetingsGetMany>[] = [
         durationText = `${durationMinutes} min`;
       }
       
-      // We'll use our custom MeetingStatusBadge instead of this logic
+      // Format date for display
+      const startDate = meeting.startedAt ? formatDate(meeting.startedAt) : "Not started";
+
+      const handleRowClick = () => {
+        router.push(`/meetings/${meeting.id}`);
+      };
 
       return (
-        <div className="flex items-center justify-between w-full p-4">
+        <div 
+          className="flex items-center justify-between w-full p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+          onClick={handleRowClick}
+        >
           <div className="flex items-center gap-4">
             <div>
               <div className="font-semibold text-lg">{meeting.name}</div>
@@ -61,6 +79,12 @@ export const columns: ColumnDef<MeetingsGetMany>[] = [
                 <span>&#8627;</span>
                 <AgentDisplay agentId={meeting.agentId} />
               </div>
+              {meeting.startedAt && (
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <Calendar className="h-3 w-3" />
+                  {startDate}
+                </div>
+              )}
             </div>
           </div>
 
@@ -77,6 +101,18 @@ export const columns: ColumnDef<MeetingsGetMany>[] = [
                 {durationText}
               </span>
             </div>
+            
+            {/* View button */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/meetings/${meeting.id}`);
+              }}
+            >
+              View
+            </Button>
           </div>
         </div>
       )
