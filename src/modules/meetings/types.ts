@@ -16,5 +16,14 @@ export type MeetingsGetMany = {
   agent?: Agent | null; // Add optional agent property
 };
 
+export type StreamTranscriptItem = {
+  speaker_id: string;
+  type: string;
+  text: string;
+  start_ts: number;
+  end_ts: number;
+};
+
+
 // Using the same type for individual meeting details
 export type MeetingsGetOne = MeetingsGetMany;

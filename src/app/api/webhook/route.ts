@@ -1,18 +1,51 @@
 import { and, eq, not } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-
-import {
-    CallEndedEvent,
-    CallTranscriptionReadyEvent,
-    CallSessionParticipantLeftEvent,
-    CallRecordingReadyEvent,
-    CallSessionParticipantJoinedEvent,
-    CallSessionStartedEvent,
-} from "@stream-io/node-sdk";
-
 import { db } from "@/db";
 import { agent, meeting } from "@/db/schemas";
 import { streamVideo } from "@/lib/stream-video-server";
+import { inngest } from "@/inngest/client";
+
+// Define types for webhook events since they may not match the SDK types exactly
+type CallSessionStartedEvent = {
+  call: {
+    id: string;
+    cid?: string;
+    custom?: {
+      meetingId?: string;
+      [key: string]: any;
+    };
+    [key: string]: any;
+  };
+  [key: string]: any;
+};
+
+type CallSessionParticipantLeftEvent = {
+  call: {
+    id: string;
+    cid?: string;
+    custom?: {
+      meetingId?: string;
+      [key: string]: any;
+    };
+  };
+  participant?: {
+    user_id?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+};
+
+type CallEndedEvent = {
+  call: {
+    id: string;
+    cid?: string;
+    custom?: {
+      meetingId?: string;
+      [key: string]: any;
+    };
+  };
+  [key: string]: any;
+};
 
 function verifySignature(body: string, signature: string): boolean {
     return streamVideo.verifyWebhook(body, signature);
@@ -51,6 +84,11 @@ export async function POST(req: NextRequest) {
 
     const eventType = (payload as Record<string, unknown>)?.type;
     console.log(`📣 Webhook event type: ${eventType}`);
+    
+    // Log the full payload for debugging recording and transcription events
+    if (eventType === "call.recording_ready" || eventType === "call.transcription_ready") {
+        console.log(`📝 FULL WEBHOOK PAYLOAD for ${eventType}:`, JSON.stringify(payload, null, 2));
+    }
 
     if (eventType === "call.session_started") {
         console.log("🔔 Webhook received call.session_started event");
@@ -208,50 +246,241 @@ export async function POST(req: NextRequest) {
 
     // Handle transcription events to ensure AI agent responds verbally
     if (eventType === "call.transcription_ready") {
+        // Use any type since the SDK types don't match the actual webhook payload
         const event = payload as any;
+        
+        // Log the full event structure for debugging
+        console.log(`📝 Full transcription event:`, JSON.stringify(event, null, 2));
+        
+        // For verbal responses, we need these fields
         const meetingId = event.session_id;
         const text = event.transcription?.text;
         const userId = event.transcription?.user?.id;
         
-        console.log(`📝 Transcription received from user ${userId}: ${text}`);
-        
-        if (!meetingId || !text || !userId) {
-            console.error("❌ Missing data in transcription event", { meetingId, text, userId });
-            return NextResponse.json({ status: "ok" }); // Still return OK to avoid webhook failures
+        // For transcript URL storage, we'll handle separately
+        // First handle the verbal response part if applicable
+        if (meetingId && text && userId) {
+            console.log(`📝 Transcription received from user ${userId}: ${text}`);
+        } else {
+            console.log("❌ Missing data for verbal response in transcription event");
+            // Don't return yet, we still want to try to save the transcript URL if available
         }
         
+        // Handle transcript URL separately from verbal response
+        // Check for both possible structures in the payload
+        const transcriptUrl = event.call_transcription?.url || event.transcript_url;
+        
+        if (transcriptUrl) {
+            console.log(`📝 Found transcript URL: ${transcriptUrl}`);
+            
+            try {
+                // Try multiple ways to extract the meeting ID
+                let callId;
+                
+                if (event.call_cid) {
+                    // Format: "default:meeting-id"
+                    callId = event.call_cid.split(":")[1];
+                    console.log(`📝 Extracted meeting ID from call_cid: ${callId}`);
+                } else if (event.call?.id) {
+                    callId = event.call.id;
+                    console.log(`📝 Extracted meeting ID from call.id: ${callId}`);
+                } else if (event.call?.custom?.meetingId) {
+                    callId = event.call.custom.meetingId;
+                    console.log(`📝 Extracted meeting ID from call.custom.meetingId: ${callId}`);
+                } else if (event.session_id) {
+                    callId = event.session_id;
+                    console.log(`📝 Using session_id as meeting ID: ${callId}`);
+                }
+                
+                console.log(`📝 Updating meeting ${callId} with transcript URL: ${transcriptUrl}`);
+                
+                if (!callId) {
+                    console.error(`❌ Unable to extract meeting ID from transcription event`);
+                    console.error("Event data:", JSON.stringify(event, null, 2));
+                    return NextResponse.json({ error: "Missing meeting ID" }, { status: 400 });
+                }
+                
+                // Verify the meeting exists before updating
+                const [existingMeeting] = await db
+                    .select()
+                    .from(meeting)
+                    .where(eq(meeting.id, callId));
+                    
+                if (!existingMeeting) {
+                    console.error(`❌ Meeting with ID ${callId} not found for transcript update`);
+                    
+                    // Try to find by matching on other fields as a fallback
+                    const allMeetings = await db
+                        .select()
+                        .from(meeting)
+                        .where(not(eq(meeting.status, "cancelled")));
+                        
+                    console.log(`📝 Available meetings:`, allMeetings.map(m => ({ id: m.id, status: m.status })));
+                    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+                }
+                
+                console.log(`📝 Found meeting to update:`, existingMeeting);
+                
+                const [updatedMeeting] = await db
+                    .update(meeting)
+                    .set({ 
+                        transcript: transcriptUrl,
+                        updatedAt: new Date()
+                    })
+                    .where(eq(meeting.id, callId))
+                    .returning();
+                
+                console.log(`✅ Updated meeting with transcript URL:`, updatedMeeting);
+                
+                if (!updatedMeeting) {
+                    console.error(`❌ Failed to update meeting ${callId} with transcript URL`);
+                } else {
+                    // Trigger Inngest function for transcript processing
+                    try {
+                        console.log(`📣 Triggering transcript processing for meeting ${updatedMeeting.id}`);
+                        await inngest.send({
+                            name: "meetings.processing",
+                            data: {
+                                meetingId: updatedMeeting.id,
+                                transcriptUrl: transcriptUrl
+                            }
+                        });
+                        console.log(`✅ Successfully triggered transcript processing`);
+                    } catch (inngestError) {
+                        console.error(`❌ Error triggering transcript processing:`, inngestError);
+                    }
+                }
+            } catch (error) {
+                console.error("❌ Error updating meeting with transcript URL:", error);
+            }
+        }
+        
+        // Only try to update agent instructions if we have the necessary data for a verbal response
+        if (meetingId && text && userId) {
+            try {
+                // Get the meeting to find the associated agent
+                const [existingMeeting] = await db
+                    .select()
+                    .from(meeting)
+                    .where(eq(meeting.id, meetingId));
+                    
+                if (!existingMeeting || !existingMeeting.agentId) {
+                    console.log(`❌ Meeting not found or has no agent for verbal response: ${meetingId}`);
+                    // Don't return yet, we might still need to process transcript URL
+                } else {
+                    // Connect to the call and update the AI agent's instructions to respond verbally
+                    console.log(`🔄 Updating AI agent instructions for verbal response...`);
+                    const call = streamVideo.video.call('default', meetingId);
+                    const realtimeClient = await streamVideo.video.connectOpenAi({
+                        call,
+                        openAiApiKey: process.env.OPENAI_API_KEY || '',
+                        agentUserId: existingMeeting.agentId,
+                    });
+                    
+                    // Update the AI agent's instructions with explicit verbal response requirement
+                    console.log(`📝 Setting AI agent instructions with verbal response requirement...`);
+                    realtimeClient.updateSession({
+                        instructions: `${existingMeeting.agentId} IMPORTANT: You must respond VERBALLY to the user. The user just said: "${text}". Respond conversationally and naturally. Always use your voice to respond, not text. This is critical: YOU MUST RESPOND VERBALLY.`,
+                    });
+                    
+                    console.log(`✅ AI agent instructions updated for verbal response`);
+                }
+            } catch (error) {
+                console.error(`❌ Error updating AI agent instructions:`, error);
+                // Continue processing - don't return yet
+            }
+        }
+        
+        // Always return a success response at the end of the transcription handler
+        return NextResponse.json({ status: "ok" });
+    }
+    
+    // Handle recording ready events
+    if (eventType === "call.recording_ready") {
+        // Use any type since the SDK types don't match the actual webhook payload
+        const event = payload as any;
+        
         try {
-            // Get the meeting to find the associated agent
+            // Try multiple ways to extract the meeting ID
+            let callId;
+            
+            if (event.call_cid) {
+                // Format: "default:meeting-id"
+                callId = event.call_cid.split(":")[1];
+                console.log(`🎥 Extracted meeting ID from call_cid: ${callId}`);
+            } else if (event.call?.id) {
+                callId = event.call.id;
+                console.log(`🎥 Extracted meeting ID from call.id: ${callId}`);
+            } else if (event.call?.custom?.meetingId) {
+                callId = event.call.custom.meetingId;
+                console.log(`🎥 Extracted meeting ID from call.custom.meetingId: ${callId}`);
+            } else if (event.session_id) {
+                callId = event.session_id;
+                console.log(`🎥 Using session_id as meeting ID: ${callId}`);
+            }
+            
+            if (!callId) {
+                console.error("❌ Missing callId in recording_ready event");
+                console.error("Event data:", JSON.stringify(event, null, 2));
+                return NextResponse.json({ error: "Missing callId" }, { status: 404 });
+            }
+            
+            // Ensure recording URL exists - check the correct path in the payload
+            if (!event.call_recording?.url) {
+                console.error("❌ Missing recording URL in recording_ready event");
+                return NextResponse.json({ error: "Missing recording URL" }, { status: 400 });
+            }
+            
+            console.log(`🎥 Recording ready for meeting ${callId}: ${event.call_recording.url}`);
+            
+            if (!callId) {
+                console.error(`❌ Unable to extract meeting ID from recording event`);
+                console.error("Event data:", JSON.stringify(event, null, 2));
+                return NextResponse.json({ error: "Missing meeting ID" }, { status: 400 });
+            }
+            
+            // Verify the meeting exists before updating
             const [existingMeeting] = await db
                 .select()
                 .from(meeting)
-                .where(eq(meeting.id, meetingId));
+                .where(eq(meeting.id, callId));
                 
-            if (!existingMeeting || !existingMeeting.agentId) {
-                console.error(`❌ Meeting not found or has no agent: ${meetingId}`);
-                return NextResponse.json({ status: "ok" });
+            if (!existingMeeting) {
+                console.error(`❌ Meeting with ID ${callId} not found for recording update`);
+                
+                // Try to find by matching on other fields as a fallback
+                const allMeetings = await db
+                    .select()
+                    .from(meeting)
+                    .where(not(eq(meeting.status, "cancelled")));
+                    
+                console.log(`🎥 Available meetings:`, allMeetings.map(m => ({ id: m.id, status: m.status })));
+                return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
             }
             
-            // Connect to the call and update the AI agent's instructions to respond verbally
-            console.log(`🔄 Updating AI agent instructions for verbal response...`);
-            const call = streamVideo.video.call('default', meetingId);
-            const realtimeClient = await streamVideo.video.connectOpenAi({
-                call,
-                openAiApiKey: process.env.OPENAI_API_KEY || '',
-                agentUserId: existingMeeting.agentId,
-            });
+            console.log(`🎥 Found meeting to update:`, existingMeeting);
             
-            // Update the AI agent's instructions with explicit verbal response requirement
-            console.log(`📝 Setting AI agent instructions with verbal response requirement...`);
-            realtimeClient.updateSession({
-                instructions: `${existingMeeting.agentId} IMPORTANT: You must respond VERBALLY to the user. The user just said: "${text}". Respond conversationally and naturally. Always use your voice to respond, not text. This is critical: YOU MUST RESPOND VERBALLY.`,
-            });
+            const [updatedMeeting] = await db
+                .update(meeting)
+                .set({ 
+                    recordingUrl: event.call_recording.url,
+                    updatedAt: new Date()
+                })
+                .where(eq(meeting.id, callId))
+                .returning();
             
-            console.log(`✅ AI agent instructions updated for verbal response`);
-            return NextResponse.json({ status: "ok", message: "AI agent instructions updated" });
+            if (!updatedMeeting) {
+                console.error(`❌ Failed to update meeting ${callId} with recording URL`);
+                return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+            }
+            
+            console.log(`✅ Updated meeting with recording URL:`, updatedMeeting);
+            
+            console.log(`✅ Updated meeting ${callId} with recording URL`);
+            return NextResponse.json({ status: "ok", message: "Recording URL saved" });
         } catch (error) {
-            console.error(`❌ Error updating AI agent instructions:`, error);
-            return NextResponse.json({ status: "ok" }); // Still return OK to avoid webhook failures
+            console.error("❌ Error updating meeting with recording URL:", error);
+            return NextResponse.json({ status: "error", message: "Failed to save recording URL" });
         }
     }
     
