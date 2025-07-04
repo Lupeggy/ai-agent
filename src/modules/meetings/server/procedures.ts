@@ -1,13 +1,23 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, sql, inArray } from "drizzle-orm";
 import jwt from 'jsonwebtoken';
 import { StreamClient } from "@stream-io/node-sdk";
+import JSONL from "jsonl-parse-stringify";
 
 import { db } from "@/db";
-import { agent, meeting } from "@/db/schemas";
+import { agent, meeting, user } from "@/db/schemas";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import { meetingInsertSchema, meetingUpdateSchema } from "../schemas";
+import { generateAvatarUrl } from "@/lib/utils";
+
+// Define the StreamTranscriptItem interface
+interface StreamTranscriptItem {
+  speaker_id: string;
+  type: string;
+  text: string;
+  timestamp?: number;
+}
 
 // Extended schema with additional fields for updates
 const extendedMeetingUpdateSchema = z.object({
@@ -22,9 +32,19 @@ const extendedMeetingUpdateSchema = z.object({
 // Define a default page size if not imported from constants
 const DEFAULT_PAGE_SIZE = 10;
 
-// Helper function to generate avatar URI
-const generateAvatarUri = ({ seed, variant }: { seed: string, variant: string }) => {
-  return `https://api.dicebear.com/7.x/${variant}/svg?seed=${encodeURIComponent(seed)}`;
+// Use the imported generateAvatarUrl function instead of local implementation
+
+// Helper function to get unique speaker IDs from transcript
+const getSpeakerIdsFromTranscript = (transcript: StreamTranscriptItem[]): string[] => {
+  const speakerIds = new Set<string>();
+  
+  transcript.forEach(item => {
+    if (item.speaker_id) {
+      speakerIds.add(item.speaker_id);
+    }
+  });
+  
+  return Array.from(speakerIds);
 };
 
 // Stream API credentials
@@ -45,9 +65,9 @@ const createStreamClient = () => {
 };
 
 // Helper function to handle Stream Video operations
-const handleStreamCall = async (callId: string, operation: 'create' | 'end', meetingName?: string) => {
+const handleStreamCall = async (callId: string, operation: 'create' | 'end', meetingsName?: string) => {
   try {
-    console.log(`Handling Stream call for meeting ${callId}, operation: ${operation}`);
+    console.log(`Handling Stream call for meetings ${callId}, operation: ${operation}`);
     
     // Create a client using the server-side SDK
     const client = createStreamClient();
@@ -59,7 +79,7 @@ const handleStreamCall = async (callId: string, operation: 'create' | 'end', mee
     
     try {
       if (operation === 'create') {
-        console.log(`Creating call for meeting ${callId}`);
+        console.log(`Creating call for meetings ${callId}`);
         
         // First try to get the call to see if it exists
         try {
@@ -74,21 +94,21 @@ const handleStreamCall = async (callId: string, operation: 'create' | 'end', mee
           data: {
             created_by_id: 'server-admin', // Required when using server-side auth
             custom: {
-              meetingId: callId,
-              meetingName: meetingName || callId,
+              meetingsId: callId,
+              meetingsName: meetingsName || callId,
               createdAt: new Date().toISOString(),
               serverManaged: true
             }
           }
         });
         
-        console.log(`Stream call created for meeting ${callId}`);
+        console.log(`Stream call created for meetings ${callId}`);
       } else if (operation === 'end') {
         // End the call
-        console.log(`Attempting to end call for meeting ${callId}`);
+        console.log(`Attempting to end call for meetings ${callId}`);
         try {
           await call.end();
-          console.log(`Stream call ended for meeting ${callId}`);
+          console.log(`Stream call ended for meetings ${callId}`);
         } catch (endError: any) {
           // If the call doesn't exist or is already ended, just log it
           console.log(`Error ending call (may not exist): ${endError?.message || endError}`);
@@ -110,12 +130,12 @@ export const meetingsRouter = createTRPCRouter({
     .input(
       z.object({
         userId: z.string().optional(),
-        meetingId: z.string()
+        meetingsId: z.string()
       })
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        console.log('Generating token for:', { userId: input.userId || ctx.auth.user.id, meetingId: input.meetingId });
+        console.log('Generating token for:', { userId: input.userId || ctx.auth.user.id, meetingsId: input.meetingsId });
         
         // Generate a Stream compatible token
         const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour
@@ -125,7 +145,7 @@ export const meetingsRouter = createTRPCRouter({
         const userId = input.userId || ctx.auth.user.id;
         const userName = ctx.auth.user.name || ctx.auth.user.email || "User";
         const userImage = ctx.auth.user.image || 
-          generateAvatarUri({ seed: userName, variant: "initials" });
+          generateAvatarUrl({ seed: userName, variant: "initials" });
         
         // Create the payload for Stream Video token
         const payload = {
@@ -136,7 +156,7 @@ export const meetingsRouter = createTRPCRouter({
           iat: issuedAt,
           // Add call specific permissions
           call: {
-            id: input.meetingId,
+            id: input.meetingsId,
             type: 'default',
             // Grant all permissions for the call
             role: 'admin',
@@ -241,7 +261,7 @@ export const meetingsRouter = createTRPCRouter({
         status ? eq(meeting.status, status) : undefined,
       );
 
-      const meetingPromise = db
+      const meetingsPromise = db
         .select()
         .from(meeting)
         .where(where)
@@ -255,7 +275,7 @@ export const meetingsRouter = createTRPCRouter({
         .where(where);
 
       const [data, [total]] = await Promise.all([
-        meetingPromise,
+        meetingsPromise,
         totalPromise,
       ]);
 
@@ -283,14 +303,14 @@ export const meetingsRouter = createTRPCRouter({
         
         // Sync with Stream Video if status is changing
         if (status && status !== existingMeeting.status) {
-          // If meeting is becoming active, ensure call exists in Stream
+          // If meetings is becoming active, ensure call exists in Stream
           if (status === 'active') {
             // Don't await this - let it run in the background
             handleStreamCall(id, 'create', name || existingMeeting.name)
               .catch(err => console.error('Background Stream call creation error:', err));
           }
           
-          // If meeting is completed, end the call in Stream
+          // If meetings is completed, end the call in Stream
           if (status === 'completed') {
             // Don't await this - let it run in the background
             handleStreamCall(id, 'end')
@@ -341,7 +361,7 @@ export const meetingsRouter = createTRPCRouter({
       } catch (error: any) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to update meeting: ${error.message}`
+          message: `Failed to update meetings: ${error.message}`
         });
       }
     }),
@@ -379,6 +399,89 @@ export const meetingsRouter = createTRPCRouter({
           message: `Failed to remove meeting: ${error.message}`
         });
       }
+    }),
+    
+  getTranscript: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const [existingMeeting] = await db
+        .select()
+        .from(meeting)
+        .where(and(eq(meeting.id, input.id), eq(meeting.userId, ctx.auth.user.id)));
+
+      if (!existingMeeting) {
+        throw new TRPCError({
+          code: "NOT_FOUND", 
+          message: "Meeting not found"
+        });
+      }
+
+      if (!existingMeeting.transcript) {
+        return [];
+      }
+
+      // Fetch and parse the transcript
+      const transcript = await fetch(existingMeeting.transcript)
+        .then((res) => res.text())
+        .then((text) => JSONL.parse<StreamTranscriptItem>(text))
+        .catch(() => {
+          return [];
+        });
+      
+      // Get unique speaker IDs from the transcript
+      const speakerIds = getSpeakerIdsFromTranscript(transcript);
+      
+      // Get user speakers
+      const userSpeakers = await db
+        .select()
+        .from(user)
+        .where(inArray(user.id, speakerIds))
+        .then((users) =>
+          users.map((user) => ({
+            ...user,
+            image: user.image ?? generateAvatarUrl({ seed: user.name, variant: "initials" }),
+          }))
+        );
+      
+      // Get agent speakers
+      const agentSpeakers = await db
+        .select()
+        .from(agent)
+        .where(inArray(agent.id, speakerIds))
+        .then((agents) =>
+          agents.map((agent) => ({
+            ...agent,
+            image: generateAvatarUrl({ seed: agent.name, variant: "botttsNeutral" }),
+          }))
+        );
+      
+      // Combine all speakers
+      const speakers = [...userSpeakers, ...agentSpeakers];
+      
+      // Add speaker information to transcript items
+      const transcriptWithSpeakers = transcript.map(item => {
+        const speaker = speakers.find((speaker) => speaker.id === item.speaker_id);
+        
+        if (!speaker) {
+          return {
+            ...item, 
+            user: {
+              name: "Unknown", 
+              image: generateAvatarUrl({ seed: "unknown", variant: "initials" })
+            }
+          };
+        }
+        
+        return {
+          ...item, 
+          user: {
+            name: speaker.name, 
+            image: speaker.image
+          }
+        };
+      });
+      
+      return transcriptWithSpeakers;
     }),
 });
 

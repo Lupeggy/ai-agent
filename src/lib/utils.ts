@@ -21,3 +21,13 @@ export function formatDuration(value: number, options?: Parameters<typeof humani
     units: ["h", "m", "s"]
   });
 }
+
+/**
+ * Generate an avatar URL using DiceBear API
+ * @param seed Seed for the avatar generation (usually a name or ID)
+ * @param variant Avatar style variant (e.g., 'initials', 'botttsNeutral')
+ * @returns URL string for the generated avatar
+ */
+export function generateAvatarUrl({ seed, variant }: { seed: string, variant: string }) {
+  return `https://api.dicebear.com/7.x/${variant}/svg?seed=${encodeURIComponent(seed)}`;
+}
