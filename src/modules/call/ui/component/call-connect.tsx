@@ -138,7 +138,22 @@ export const CallConnect = ({
         try {
           // Connect the client
           console.log('Connecting Stream client...');
-          // No need to call connectUser since we provided user and token in constructor
+          
+          // Let's try a different approach - create client first without token, then connect
+          // This avoids issues with token parsing during construction
+          if (!token) {
+            throw new Error('Missing authentication token');
+          }
+          
+          // Simplified user object with minimal data to reduce chance of errors
+          const userObject = { 
+            id: userId, 
+            name: userName.replace(/[^\w\s.-]/g, ''), // Clean name - only allow safe characters 
+            image: userImage 
+          };
+          
+          console.log('Connecting user with token...');
+          await _client.connectUser(userObject, token);
           console.log('Stream client connected successfully');
           
           if (isActive) {
