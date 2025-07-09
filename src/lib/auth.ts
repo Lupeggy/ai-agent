@@ -16,7 +16,7 @@ export const auth = betterAuth({
             use: [
                 checkout({
                     authenticatedUsersOnly: true,
-                    successUrl: "/dashboard",
+                    successUrl: "/upgrade",
                 }),
                 portal(),
             ],
@@ -27,12 +27,10 @@ export const auth = betterAuth({
         github: { 
             clientId: process.env.GITHUB_CLIENT_ID as string, 
             clientSecret: process.env.GITHUB_CLIENT_SECRET as string, 
-            redirectUrl: "/dashboard",
         },
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-            redirectUrl: "/dashboard",
         },
     },
     
