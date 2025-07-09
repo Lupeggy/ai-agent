@@ -2,13 +2,14 @@
 
 import { trpc } from "@/trpc/client";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { formatDuration, cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { MeetingIdViewHeader } from "../components/meeting-id-view-header";
 import { EditMeetingDialog } from "../components/edit-meeting-dialog";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
   Dialog,
   DialogContent,
@@ -18,12 +19,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { 
-  AlertCircle, Clock, Activity, CheckCircle, Loader2, XCircle, PhoneCall, Play, User, Bot, Sparkles, FileText, Video 
+  AlertCircle, 
+  Activity,
+  Bot,
+  CheckCircle,
+  Clock,
+  FileText,
+  Loader2,
+  PhoneCall,
+  Play,
+  Search,
+  Sparkles,
+  User,
+  Video,
+  XCircle
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { CompletedState, Message, parseTranscript } from "../components/completed-state";
 import { MeetingView } from "@/components/meeting-view";
 import { GeneratedAvatar } from "@/components/generated-avatar";
+import { TranscriptView } from "../components/transcript-view";
 import { MeetingStatusBadge } from "../components/meeting-status-badge";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -44,7 +60,42 @@ export const MeetingIdView = ({ meetingId }: Props) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Query to get meeting details
-  const { data: meeting, isLoading, error } = trpc.meetings.getOne.useQuery({ id: meetingId });
+  const { data: meeting, isLoading, error, refetch } = trpc.meetings.getOne.useQuery(
+    { id: meetingId },
+    {
+      // Set up polling to check for summary updates
+      refetchInterval: (data) => {
+        // TypeScript is having trouble with the data type, so let's safely check
+        if (!data) return false;
+        // @ts-ignore - We know the structure includes status
+        const status = data.status;
+        // @ts-ignore - We know the structure includes summary
+        const summary = data.summary;
+        console.log(`Meeting ${meetingId} status: ${status}, summary: ${summary ? 'Present' : 'Missing'}`);
+        
+        // Poll more frequently when processing to catch summary updates as soon as possible
+        if (status === "processing") {
+          return 3000; // Check every 3 seconds when processing
+        } else if (status === "completed" && !summary) {
+          // If status is completed but summary is missing, still poll to check if it arrives
+          return 5000; // Check every 5 seconds for a missing summary
+        }
+        return false;
+      }
+    }
+  );
+  
+  // Add debugging to check meeting data on every render
+  useEffect(() => {
+    if (meeting) {
+      console.log(`Meeting data updated:`, {
+        id: meeting.id,
+        status: meeting.status,
+        summary: meeting.summary ? `${meeting.summary.substring(0, 50)}...` : 'null',
+        updatedAt: meeting.updatedAt
+      });
+    }
+  }, [meeting]);
 
   // Query to get agent details if we have an agentId
   const { data: agent } = trpc.agents.getOne.useQuery(
@@ -216,7 +267,7 @@ export const MeetingIdView = ({ meetingId }: Props) => {
         </div>
       </div>
       
-      {/* Traditional MeetingView for other meeting statuses */}
+      {/* Traditional MeetingView for other meeting statuses
       {meeting?.status !== "completed" && meeting?.status !== "processing" && meeting && (
         <MeetingView
           status={meeting.status}
@@ -235,7 +286,7 @@ export const MeetingIdView = ({ meetingId }: Props) => {
           } : undefined}
           className="mt-4"
         />
-      )}
+      )} */}
       
       {/* Frameless horizontal tabs layout for completed and processing meetings */}
       {(meeting?.status === "completed" || meeting?.status === "processing") && meeting && (
@@ -267,188 +318,39 @@ export const MeetingIdView = ({ meetingId }: Props) => {
             
             {/* Summary Tab Content */}
             <TabsContent value="summary" className="p-4 bg-gray-50 rounded-md">
-              {meeting.summary ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown
-                    components={{
-                      h1: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                        <h1 className="text-2xl font-medium mb-6" {...props} />
-                      ),
-                      h2: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                        <h2 className="text-xl font-medium mb-6" {...props} />
-                      ),
-                      h3: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                        <h3 className="text-lg font-medium mb-6" {...props} />
-                      ),
-                      h4: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                        <h4 className="text-base font-medium mb-6" {...props} />
-                      ),
-                      ul: (props: React.HTMLProps<HTMLUListElement>) => (
-                        <ul className="list-disc pl-6 mb-6 space-y-2" {...props} />
-                      ),
-                      ol: ({ node, ordered, className, children, ...props }: any) => (
-                        <ol className="list-decimal pl-6 mb-6 space-y-2" {...props}>
-                          {children}
-                        </ol>
-                      ),
-                      li: (props: React.HTMLProps<HTMLLIElement>) => (
-                        <li className="mb-1" {...props} />
-                      ),
-                      p: (props: React.HTMLProps<HTMLParagraphElement>) => (
-                        <p className="mb-4" {...props} />
-                      ),
-                      blockquote: (props: React.HTMLProps<HTMLQuoteElement>) => (
-                        <blockquote className="border-l-4 border-gray-200 pl-4 italic my-4" {...props} />
-                      ),
-                    }}
-                  >
-                    {meeting.summary}
-                  </ReactMarkdown>
+              {meeting.status === "processing" && !meeting.summary ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <div className="flex flex-col items-center">
+                    <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                    <p>Summary is being generated...</p>
+                    <p className="text-xs mt-1">This might take a minute or two.</p>
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  {meeting.status === "processing" ? "Summary is being processed..." : "No summary available"}
-                </div>
+                <CompletedState
+                  meeting={meeting}
+                  agentName={agent?.name}
+                  agentId={meeting.agentId}
+                  userName="You"
+                  startedAt={meeting.startedAt}
+                  endedAt={meeting.endedAt}
+                  summary={meeting.summary}
+                />
               )}
             </TabsContent>
             
             {/* Transcript Tab Content */}
             <TabsContent value="transcript" className="p-4 bg-gray-50 rounded-md">
-              {meeting.transcript ? (
-                <div className="space-y-4">
-                  {/* Debug info to see what's in the transcript */}
-                  <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-xs font-mono">Transcript length: {meeting.transcript?.length || 0} characters</p>
-                    <p className="text-xs font-mono">First 100 chars: {meeting.transcript?.substring(0, 100)}</p>
-                  </div>
-                  
-                  {/* Simple transcript display with basic formatting */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Conversation Transcript:</h3>
-                    <div className="whitespace-pre-wrap font-sans text-sm bg-gray-50 p-4 rounded-md border">
-                      <ReactMarkdown
-                        components={{
-                          h1: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                            <h1 className="text-2xl font-medium mb-6" {...props} />
-                          ),
-                          h2: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                            <h2 className="text-xl font-medium mb-6" {...props} />
-                          ),
-                          h3: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                            <h3 className="text-lg font-medium mb-6" {...props} />
-                          ),
-                          h4: (props: React.HTMLProps<HTMLHeadingElement>) => (
-                            <h4 className="text-base font-medium mb-6" {...props} />
-                          ),
-                          ul: (props: React.HTMLProps<HTMLUListElement>) => (
-                            <ul className="list-disc pl-6 mb-6 space-y-2" {...props} />
-                          ),
-                          ol: ({ node, ordered, className, children, ...props }: any) => (
-                            <ol className="list-decimal pl-6 mb-6 space-y-2" {...props}>
-                              {children}
-                            </ol>
-                          ),
-                          li: (props: React.HTMLProps<HTMLLIElement>) => (
-                            <li className="mb-1" {...props} />
-                          ),
-                          p: (props: React.HTMLProps<HTMLParagraphElement>) => (
-                            <p className="mb-4" {...props} />
-                          ),
-                          blockquote: (props: React.HTMLProps<HTMLQuoteElement>) => (
-                            <blockquote className="border-l-4 border-gray-200 pl-4 italic my-4" {...props} />
-                          ),
-                          code: ({ node, inline, className, children, ...props }: any) => (
-                            inline ? 
-                              <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono" {...props}>{children}</code> :
-                              <pre className="bg-gray-100 p-4 rounded-md overflow-auto font-mono text-sm" {...props}>
-                                <code>{children}</code>
-                              </pre>
-                          )
-                        }}
-                      >
-                        {meeting.transcript}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                  
-                  {/* Formatted messages - will try to parse the transcript */}
-                  <div className="mt-8">
-                    <h3 className="text-lg font-medium mb-4">Formatted Messages:</h3>
-                    {(() => {
-                      // Try to parse the transcript as JSON
-                      try {
-                        // Try to extract JSON objects line by line
-                        const lines = meeting.transcript.split('\n');
-                        const messages = [];
-                        
-                        // First try to find JSON objects
-                        for (const line of lines) {
-                          if (line.includes('"speaker_id":') && line.includes('"text":')) {
-                            try {
-                              // Find the JSON object in the line
-                              const jsonStart = line.indexOf('{');
-                              const jsonEnd = line.lastIndexOf('}');
-                              
-                              if (jsonStart >= 0 && jsonEnd >= 0) {
-                                const jsonStr = line.substring(jsonStart, jsonEnd + 1);
-                                const item = JSON.parse(jsonStr);
-                                
-                                if (item.speaker_id && item.text) {
-                                  messages.push({
-                                    isAgent: item.speaker_id === "agent" || 
-                                             item.speaker_id === meeting.agentId || 
-                                             (agent?.id && item.speaker_id === agent.id),
-                                    content: item.text,
-                                    timestamp: item.start_ts,
-                                    speakerName: item.speaker_id === "agent" || 
-                                                item.speaker_id === meeting.agentId || 
-                                                (agent?.id && item.speaker_id === agent.id) 
-                                                ? agent?.name || "Agent" : "You"
-                                  });
-                                }
-                              }
-                            } catch (err) {
-                              console.error("Error parsing JSON line:", err);
-                            }
-                          }
-                        }
-                        
-                        // If we found messages, display them
-                        if (messages.length > 0) {
-                          return messages.map((item, index) => (
-                            <Message 
-                              key={index}
-                              isAgent={!!item.isAgent}
-                              content={item.content}
-                              timestamp={item.timestamp}
-                              speakerName={item.speakerName}
-                              agentId={meeting.agentId || ""}
-                            />
-                          ));
-                        }
-                        
-                        // If no JSON objects found, try simple text parsing
-                        return (
-                          <div className="p-4 bg-red-50 border border-red-200 rounded">
-                            <p>Could not parse transcript as JSON. Showing raw text above.</p>
-                          </div>
-                        );
-                      } catch (e) {
-                        console.error("Error parsing transcript:", e);
-                        return (
-                          <div className="p-4 bg-red-50 border border-red-200 rounded">
-                            <p>Error parsing transcript: {String(e)}</p>
-                          </div>
-                        );
-                      }
-                    })()} 
-                  </div>
+              <ScrollArea className="h-[60vh] rounded-md border">
+                <div className="p-4">
+                  <TranscriptContent 
+                    transcriptUrl={meeting.transcript}
+                    agentId={meeting.agentId}
+                    userName="You"
+                    agentName={agent?.name || "AI Assistant"}
+                  />
                 </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  {meeting.status === "processing" ? "Transcript is being processed..." : "No transcript available"}
-                </div>
-              )}
+              </ScrollArea>
             </TabsContent>
             
             {/* Recording Tab Content */}
@@ -503,6 +405,77 @@ export const MeetingIdView = ({ meetingId }: Props) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+// Component to fetch transcript content from URL
+interface TranscriptContentProps {
+  transcriptUrl: string | null;
+  agentId: string;
+  userName: string;
+  agentName: string;
+}
+
+const TranscriptContent = ({ transcriptUrl, agentId, userName, agentName }: TranscriptContentProps) => {
+  const [transcriptContent, setTranscriptContent] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Fetch transcript content when URL changes
+  useEffect(() => {
+    const fetchTranscript = async () => {
+      if (!transcriptUrl) {
+        setTranscriptContent(null);
+        return;
+      }
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const response = await fetch(transcriptUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch transcript: ${response.status}`);
+        }
+        
+        const content = await response.text();
+        setTranscriptContent(content);
+      } catch (err) {
+        console.error('Error fetching transcript:', err);
+        setError('Failed to load transcript. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchTranscript();
+  }, [transcriptUrl]);
+  
+  return (
+    <div className="space-y-4 w-full">
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search transcript..."
+          className="pl-8 w-full"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+      
+      <TranscriptView
+        transcript={transcriptContent}
+        agentId={agentId}
+        userName={userName}
+        agentName={agentName}
+        isLoading={isLoading}
+        searchQuery={searchQuery}
+      />
     </div>
   );
 };

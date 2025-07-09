@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { BotIcon, Video, ArrowUpCircle } from "lucide-react"
 import { DashboardUserButton } from "./dashboard-user-button"
 import { useSidebar } from "@/components/ui/sidebar"
+import { DashboardTrial } from "./dashboard-trial"
 
 const mainNav = [
   { label: "Meetings", href: "/meetings", icon: <Video size={20} /> },
@@ -67,7 +68,7 @@ export function DashboardSidebar() {
       <div className="border-t my-4" />
 
       {/* Secondary Navigation */}
-      <nav className="flex flex-col gap-1 mb-auto">
+      <nav className="flex flex-col gap-1">
         {secondaryNav.map((item) => (
           <Link
             key={item.href}
@@ -82,6 +83,11 @@ export function DashboardSidebar() {
           </Link>
         ))}
       </nav>
+      
+      {/* Trial Usage Component */}
+      <div className="mt-4 px-2">
+        <DashboardTrial />
+      </div>
       
       {/* Divider before user button */}
       <div className="border-t my-4" />

@@ -3,14 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { meeting } from "@/db/schemas";
+import type { Meeting } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
 import { format } from "date-fns";
 import { generateAvatar } from "@/lib/stream-video";
-import type { InferSelectModel } from "drizzle-orm";
+
 import { Mic, MicOff, Video, VideoOff, ArrowRight } from "lucide-react";
 
 // Toggle button for camera and microphone
@@ -38,7 +38,7 @@ const ToggleButton = ({
 );
 
 interface CallLobbyProps {
-  meeting: InferSelectModel<typeof meeting> | null;
+  meeting: Meeting | null;
   onJoinCall: (cameraEnabled: boolean, microphoneEnabled: boolean) => void;
   isAdmin: boolean;
 }

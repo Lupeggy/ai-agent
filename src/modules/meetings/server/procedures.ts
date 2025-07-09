@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
-import jwt from 'jsonwebtoken';
+import { createAvatar } from "@dicebear/core";
+import * as initialStyle from "@dicebear/initials";
 import { StreamClient } from "@stream-io/node-sdk";
+import { streamVideo, generateStreamToken } from "@/lib/stream-video-server";
+import { inngest } from "@/inngest/client";
 
 import { db } from "@/db";
 import { agent, meeting } from "@/db/schemas";
-import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
+import { createTRPCRouter, protectedProcedure, premiumProcedure } from "@/trpc/init";
 import { meetingInsertSchema, meetingUpdateSchema } from "../schemas";
 
 // Extended schema with additional fields for updates
@@ -117,36 +120,26 @@ export const meetingsRouter = createTRPCRouter({
       try {
         console.log('Generating token for:', { userId: input.userId || ctx.auth.user.id, meetingId: input.meetingId });
         
-        // Generate a Stream compatible token
-        const expirationTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-        const issuedAt = Math.floor(Date.now() / 1000) - 60; // 1 minute ago (for clock skew)
-        
         // Use the explicitly provided userId if available, otherwise fall back to the authenticated user
         const userId = input.userId || ctx.auth.user.id;
-        const userName = ctx.auth.user.name || ctx.auth.user.email || "User";
-        const userImage = ctx.auth.user.image || 
-          generateAvatarUri({ seed: userName, variant: "initials" });
         
-        // Create the payload for Stream Video token
-        const payload = {
-          user_id: userId,
-          user_name: userName,
-          user_image: userImage,
-          exp: expirationTime,
-          iat: issuedAt,
-          // Add call specific permissions
-          call: {
-            id: input.meetingId,
-            type: 'default',
-            // Grant all permissions for the call
-            role: 'admin',
-          }
-        };
+        // Sanitize the userId to prevent any issues
+        const sanitizedUserId = userId.replace(/[^\w-]/g, '');
         
-        console.log('Token payload:', JSON.stringify(payload, null, 2));
+        console.log('Using sanitized userId for token generation:', sanitizedUserId);
         
-        // Sign with the Stream API Secret
-        const token = jwt.sign(payload, STREAM_API_SECRET!);
+        // Use the dedicated stream token generator from stream-video-server.ts
+        // This function handles all the JWT creation properly
+        const token = generateStreamToken(sanitizedUserId);
+        
+        if (!token) {
+          throw new Error('Failed to generate token');
+        }
+        
+        console.log('Generated Stream token successfully for:', sanitizedUserId);
+        
+        // The token expiration is handled by the generateStreamToken function (1 hour)
+        const expirationTime = Math.floor(Date.now() / 1000) + 3600;
         
         console.log('Generated token successfully for:', userId);
         
@@ -164,7 +157,7 @@ export const meetingsRouter = createTRPCRouter({
       }
     }),
   
-  create: protectedProcedure
+  create: premiumProcedure("meeting")
     .input(meetingInsertSchema)
     .mutation(async ({ input, ctx }) => {
       try {
@@ -317,7 +310,55 @@ export const meetingsRouter = createTRPCRouter({
         
         if (name) updateData.name = name;
         if (agentId) updateData.agentId = agentId;
-        if (status) updateData.status = status;
+        if (status) {
+          updateData.status = status;
+          
+          // If status is changing to "processing", trigger the Inngest event for meeting processing
+          if (status === "processing") {
+            // Fetch the meeting to get the transcript URL if not already fetched
+            const meetingData = existingMeeting || await db
+              .select()
+              .from(meeting)
+              .where(eq(meeting.id, id))
+              .then(rows => rows[0]);
+
+            if (meetingData && meetingData.transcript) {
+              console.log(`Triggering summary generation for meeting: ${id} with transcript URL: ${meetingData.transcript}`);
+              
+              // For debugging, let's print meeting data
+              console.log(`Meeting data for ${id}:`, {
+                status: meetingData.status,
+                hasTranscript: !!meetingData.transcript,
+                hasSummary: !!meetingData.summary,
+                transcript_length: meetingData.transcript ? meetingData.transcript.length : 0,
+                updatedAt: meetingData.updatedAt
+              });
+              
+              // Trigger the meetings.processing event
+              try {
+                // Send event asynchronously to keep the response fast
+                inngest.send({
+                  name: "meetings.processing",
+                  data: {
+                    meetingId: id,
+                    transcriptUrl: meetingData.transcript,
+                    userId: ctx.auth.user.id
+                  }
+                }).then(() => {
+                  console.log(`Successfully sent meetings.processing event for meeting ${id}`);
+                }).catch(err => {
+                  console.error(`Error sending meetings.processing event for meeting ${id}:`, err);
+                });
+              } catch (error) {
+                console.error(`Exception when sending meetings.processing event for meeting ${id}:`, error);
+              }
+            } else {
+              console.error(`Cannot trigger summary generation: Meeting ${id} has no transcript URL or meeting data is missing`);
+              console.log(`Meeting data available:`, meetingData ? 'Yes' : 'No');
+              console.log(`Transcript available:`, meetingData?.transcript ? 'Yes' : 'No');
+            }
+          }
+        }
         
         // Ensure dates are properly handled
         if (startedAt) {
@@ -381,4 +422,3 @@ export const meetingsRouter = createTRPCRouter({
       }
     }),
 });
-

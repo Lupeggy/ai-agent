@@ -16,12 +16,29 @@ export type MeetingsGetMany = {
   agent?: Agent | null; // Add optional agent property
 };
 
+// Raw transcript item from Stream API
 export type StreamTranscriptItem = {
-  speaker_id: string;
-  type: string;
   text: string;
-  start_ts: number;
-  end_ts: number;
+  user_id: string;
+  created_at: string;
+  type?: string;
+  id?: string;
+  session_id?: string;
+};
+
+// Processed transcript item with speaker info
+export type ProcessedTranscriptItem = {
+  id: string;
+  text: string;
+  userId: string;
+  speaker: {
+    id: string;
+    name: string;
+    image?: string | null;
+    isAgent: boolean;
+  };
+  timestamp: string;
+  type?: string;
 };
 
 
