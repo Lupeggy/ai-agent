@@ -11,7 +11,8 @@
     "db:push": "drizzle-kit push --config=src/db/drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config=src/db/drizzle.config.ts --port 4984",
     "dev:webhook": "ngrok http --url=uniquely-brave-drum.ngrok-free.app 3000",
-    "test:webhook": "node scripts/test-webhook.js"
+    "test:webhook": "node scripts/test-webhook.js",
+    "postinstall": "npm rebuild lightningcss --update-binary"
   },
   "dependencies": {
     "@dicebear/bottts-neutral": "^9.2.3",
